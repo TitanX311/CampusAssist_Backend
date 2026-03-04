@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: auth-service-config
+  namespace: default
+  labels:
+    app: auth-service
+data:
+  APP_NAME: "Auth Service"
+  DEBUG: "false"
+  HOST: "0.0.0.0"
+  PORT: "8000"
+  ALGORITHM: "HS256"
+  ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+  REFRESH_TOKEN_EXPIRE_DAYS: "7"
