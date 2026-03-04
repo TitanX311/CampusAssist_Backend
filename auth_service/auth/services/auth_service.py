@@ -33,6 +33,7 @@ class AuthService:
         self.refresh_tokens = RefreshTokenRepository(db)
 
     async def google_auth(self, data: GoogleAuthRequest) -> TokenResponse:
+        print(data)
         # Verify the Google ID token signature and claims
         try:
             id_info = google_id_token.verify_oauth2_token(
@@ -41,6 +42,7 @@ class AuthService:
                 settings.GOOGLE_CLIENT_ID,
             )
         except ValueError as exc:
+            print(exc)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=f"Invalid Google ID token: {exc}",
