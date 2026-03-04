@@ -1,3 +1,5 @@
 env/
 __pycache__/
+bin/
 .env
+k8s/**/secret.yaml
