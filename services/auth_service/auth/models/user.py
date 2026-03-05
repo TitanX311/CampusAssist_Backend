@@ -11,6 +11,8 @@ from auth.models.base import Base
 
 if TYPE_CHECKING:
     from auth.models.user_credential import UserCredential
+    # avoid circular import at runtime
+    from college.models.college import College  # noqa: F401
 
 
 class UserType(str, enum.Enum):
@@ -45,4 +47,11 @@ class User(Base):
 
     credentials: Mapped[list["UserCredential"]] = relationship(
         "UserCredential", back_populates="user", cascade="all, delete-orphan"
+    )
+
+    # colleges where this user has admin access
+    admin_colleges: Mapped[list["College"]] = relationship(
+        "College",
+        secondary="college_admins",
+        back_populates="admin_users",
     )
