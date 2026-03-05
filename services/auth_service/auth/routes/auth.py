@@ -3,6 +3,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.config.database import get_db
 from auth.schemas.auth import (
+    EmailLoginRequest,
+    EmailRegisterRequest,
     GoogleAuthRequest,
     LogoutRequest,
     RefreshRequest,
@@ -27,6 +29,34 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 )
 async def google_auth(data: GoogleAuthRequest, db: AsyncSession = Depends(get_db)):
     return await AuthService(db).google_auth(data)
+
+
+@router.post(
+    "/register",
+    response_model=TokenResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Register with email and password",
+    description=(
+        "Create a new account using an email address and password. "
+        "Returns an access token + refresh token on success. "
+        "The account's email_verified flag starts as false."
+    ),
+)
+async def register_email(
+    data: EmailRegisterRequest, db: AsyncSession = Depends(get_db)
+):
+    return await AuthService(db).register_email(data)
+
+
+@router.post(
+    "/login",
+    response_model=TokenResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Sign in with email and password",
+    description="Authenticate an existing email/password account and receive tokens.",
+)
+async def login_email(data: EmailLoginRequest, db: AsyncSession = Depends(get_db)):
+    return await AuthService(db).login_email(data)
 
 
 @router.post(

@@ -31,22 +31,18 @@ spec:
           readinessProbe:
             exec:
               command:
-                - pg_isready
-                - -U
-                - campus_assist
-                - -d
-                - campus_assist_db
+                - sh
+                - -c
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
             initialDelaySeconds: 5
             periodSeconds: 5
             failureThreshold: 5
           livenessProbe:
             exec:
               command:
-                - pg_isready
-                - -U
-                - campus_assist
-                - -d
-                - campus_assist_db
+                - sh
+                - -c
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
             initialDelaySeconds: 15
             periodSeconds: 15
             failureThreshold: 3

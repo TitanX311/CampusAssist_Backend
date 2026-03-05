@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 
 class GoogleAuthRequest(BaseModel):
@@ -13,11 +13,27 @@ class GoogleAuthRequest(BaseModel):
     )
 
 
+class EmailRegisterRequest(BaseModel):
+    """Register a new account using an email address and password."""
+
+    email: EmailStr
+    password: str = Field(min_length=8, description="Minimum 8 characters")
+    name: str | None = Field(default=None, description="Optional display name")
+
+
+class EmailLoginRequest(BaseModel):
+    """Sign in with an existing email/password account."""
+
+    email: EmailStr
+    password: str
+
+
 class UserResponse(BaseModel):
     id: str
     email: str
     name: str | None
     picture: str | None
+    email_verified: bool
 
 
 class TokenResponse(BaseModel):

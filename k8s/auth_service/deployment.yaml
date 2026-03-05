@@ -29,7 +29,7 @@ spec:
               echo "PostgreSQL is ready."
       containers:
         - name: auth-service
-          image: darshanpanzade2006/campus_assist_auth:1.0.2
+          image: darshanpanzade2006/campus_assist_auth:1.0.3
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000

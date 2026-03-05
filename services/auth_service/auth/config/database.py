@@ -6,8 +6,13 @@ from auth.config.settings import get_settings
 
 settings = get_settings()
 
-# asyncpg requires the postgresql+asyncpg:// scheme
-_db_url = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+# asyncpg requires the postgresql+asyncpg:// scheme.
+# Normalise both postgres:// and postgresql:// (e.g. Heroku / Railway / Supabase).
+_db_url = (
+    settings.DATABASE_URL
+    .replace("postgresql://", "postgresql+asyncpg://", 1)
+    .replace("postgres://", "postgresql+asyncpg://", 1)
+)
 
 engine = create_async_engine(
     _db_url,
