@@ -37,6 +37,7 @@ def _user_response(user) -> UserResponse:
         name=user.name,
         picture=user.picture,
         email_verified=user.email_verified,
+        type=user.type.value,
     )
 
 

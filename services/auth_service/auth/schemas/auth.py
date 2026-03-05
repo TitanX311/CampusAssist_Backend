@@ -34,6 +34,7 @@ class UserResponse(BaseModel):
     name: str | None
     picture: str | None
     email_verified: bool
+    type: str
 
 
 class TokenResponse(BaseModel):

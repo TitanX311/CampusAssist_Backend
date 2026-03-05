@@ -1,14 +1,21 @@
+import enum
 import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, String
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from auth.models.base import Base
 
 if TYPE_CHECKING:
     from auth.models.user_credential import UserCredential
+
+
+class UserType(str, enum.Enum):
+    USER = "USER"
+    COLLEGE = "COLLEGE"
 
 
 class User(Base):
@@ -21,6 +28,9 @@ class User(Base):
     name: Mapped[str | None] = mapped_column(String, nullable=True)
     picture: Mapped[str | None] = mapped_column(String, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    type: Mapped[UserType] = mapped_column(
+        SAEnum(UserType, name="user_type"), nullable=False, default=UserType.USER
+    )
     # True for Google OAuth users (Google already verified the address).
     # False for email/password users until they complete email verification.
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
