@@ -58,3 +58,13 @@ class CommunityListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class JoinCommunityResponse(BaseModel):
+    """Result of a join / join-request action."""
+
+    community_id: str
+    # 'joined' — user is now an active member (PUBLIC community)
+    # 'requested' — user is in the pending list (PRIVATE community)
+    status: str
+    message: str
