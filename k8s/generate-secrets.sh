@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# Generates k8s/auth_service/secret.yaml and k8s/postgres/secret.yaml
-# from services/auth_service/.env
+# Generates:
+#   k8s/auth_service/secret.yaml + k8s/postgres/secret.yaml
+#     from services/auth_service/.env
+#   k8s/community_service/secret.yaml + k8s/community_postgres/secret.yaml
+#     from services/community_service/.env
 # Usage: bash k8s/generate-secrets.sh
 # Output files are git-ignored — never commit them.
 
@@ -108,3 +111,88 @@ stringData:
 EOF
 
 echo "Generated: $OUT_FILE"
+# ============================================================
+# COMMUNITY SERVICE
+# ============================================================
+COMMUNITY_ENV_FILE="$SCRIPT_DIR/../services/community_service/.env"
+COMMUNITY_OUT_FILE="$SCRIPT_DIR/community_service/secret.yaml"
+COMMUNITY_PG_OUT_FILE="$SCRIPT_DIR/community_postgres/secret.yaml"
+
+if [[ ! -f "$COMMUNITY_ENV_FILE" ]]; then
+  echo "ERROR: .env file not found at $COMMUNITY_ENV_FILE"
+  exit 1
+fi
+
+parse_community_env() {
+  local key="$1"
+  grep -E "^${key}=" "$COMMUNITY_ENV_FILE" \
+    | head -1 \
+    | sed "s/^${key}=//" \
+    | sed "s/[[:space:]]*#.*$//" \
+    | sed "s/^[[:space:]]*//; s/[[:space:]]*$//" \
+    | sed "s/^['\"]//; s/['\"]$//"
+}
+
+COMMUNITY_DATABASE_URL="$(parse_community_env DATABASE_URL)"
+
+if [[ -z "$COMMUNITY_DATABASE_URL" ]]; then
+  echo "ERROR: DATABASE_URL is missing or empty in $COMMUNITY_ENV_FILE"
+  exit 1
+fi
+
+# ---- Derive Postgres credentials from COMMUNITY_DATABASE_URL --------
+_c_no_scheme="${COMMUNITY_DATABASE_URL#*://}"
+_c_userinfo="${_c_no_scheme%%@*}"
+COMMUNITY_PG_USER="${_c_userinfo%%:*}"
+COMMUNITY_PG_PASSWORD="${_c_userinfo#*:}"
+_c_hostpath="${_c_no_scheme#*@}"
+COMMUNITY_PG_DB="${_c_hostpath##*/}"
+COMMUNITY_PG_DB="${COMMUNITY_PG_DB%%\?*}"
+
+for var in COMMUNITY_PG_USER COMMUNITY_PG_PASSWORD COMMUNITY_PG_DB; do
+  if [[ -z "${!var}" ]]; then
+    echo "ERROR: Could not parse $var from COMMUNITY DATABASE_URL."
+    echo "       Ensure the URL is in the form: postgresql://user:password@host:5432/dbname"
+    exit 1
+  fi
+done
+
+# ---- Build k8s DATABASE_URL for community service -------------------
+COMMUNITY_K8S_DATABASE_URL="${COMMUNITY_DATABASE_URL//localhost/community-postgres-service}"
+COMMUNITY_K8S_DATABASE_URL="${COMMUNITY_K8S_DATABASE_URL//127.0.0.1/community-postgres-service}"
+COMMUNITY_K8S_DATABASE_URL="${COMMUNITY_K8S_DATABASE_URL//postgresql:\/\//postgresql+asyncpg://}"
+COMMUNITY_K8S_DATABASE_URL="${COMMUNITY_K8S_DATABASE_URL//postgres:\/\//postgresql+asyncpg://}"
+
+# ---- Generate community_postgres/secret.yaml ------------------------
+cat > "$COMMUNITY_PG_OUT_FILE" <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: community-postgres-secret
+  namespace: default
+  labels:
+    app: community-postgres
+type: Opaque
+stringData:
+  POSTGRES_USER: "${COMMUNITY_PG_USER}"
+  POSTGRES_PASSWORD: "${COMMUNITY_PG_PASSWORD}"
+  POSTGRES_DB: "${COMMUNITY_PG_DB}"
+EOF
+
+echo "Generated: $COMMUNITY_PG_OUT_FILE"
+
+# ---- Generate community_service/secret.yaml -------------------------
+cat > "$COMMUNITY_OUT_FILE" <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: community-service-secret
+  namespace: default
+  labels:
+    app: community-service
+type: Opaque
+stringData:
+  DATABASE_URL: "${COMMUNITY_K8S_DATABASE_URL}"
+EOF
+
+echo "Generated: $COMMUNITY_OUT_FILE"

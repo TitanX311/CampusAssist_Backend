@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: community-service-config
+  namespace: default
+  labels:
+    app: community-service
+data:
+  APP_NAME: "Community Service"
+  DEBUG: "false"
+  HOST: "0.0.0.0"
+  PORT: "8000"
