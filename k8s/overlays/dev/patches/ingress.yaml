@@ -1,0 +1,25 @@
+# No host restriction — dev lives in its own namespace so there is no
+# collision with the production ingress in the default namespace.
+# Responds to any IP/hostname, making local development easier.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: campus-assist-ingress
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /api/auth
+            pathType: Prefix
+            backend:
+              service:
+                name: auth-service
+                port:
+                  number: 80
+          - path: /api/community
+            pathType: Prefix
+            backend:
+              service:
+                name: community-service
+                port:
+                  number: 80

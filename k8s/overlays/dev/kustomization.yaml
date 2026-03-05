@@ -1,0 +1,37 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Development overlay — namespace: dev, :dev image tags, DEBUG enabled, relaxed resources.
+# Run `bash k8s/generate-secrets.sh dev` before applying to generate secret.yaml files.
+# Deploy:   kubectl apply -k k8s/overlays/dev
+# Teardown: kubectl delete -k k8s/overlays/dev
+
+namespace: dev
+
+resources:
+  - ../../base
+  - namespace.yaml
+  # generated secrets (git-ignored) — run generate-secrets.sh dev first
+  - auth_service/secret.yaml
+  - postgres/secret.yaml
+  - community_service/secret.yaml
+  - community_postgres/secret.yaml
+
+# Use :dev image tags built locally with nerdctl
+images:
+  - name: darshanpanzade2006/campus_assist_auth
+    newTag: dev
+  - name: darshanpanzade2006/campus_assist_community
+    newTag: dev
+
+patches:
+  # Enable DEBUG and relax token expiry for development
+  - path: patches/auth-service-config.yaml
+  - path: patches/community-service-config.yaml
+  # Reduce resource limits to ease minikube pressure
+  - path: patches/auth-service-deploy.yaml
+  - path: patches/community-service-deploy.yaml
+  - path: patches/postgres-deploy.yaml
+  - path: patches/community-postgres-deploy.yaml
+  # Scope dev ingress to its own hostname to avoid route collision with prod
+  - path: patches/ingress.yaml

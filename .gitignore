@@ -2,4 +2,10 @@ env/
 __pycache__/
 bin/
 .env
+
+# Production env files (contain real credentials)
+services/**/.env.prod
+
+# Generated k8s secrets — never commit
+k8s/overlays/**/secret.yaml
 k8s/**/secret.yaml

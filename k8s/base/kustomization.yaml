@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Base manifests — environment-agnostic.
+# Secrets are NOT listed here; each overlay provides them.
+resources:
+  # auth service
+  - auth_service/deployment.yaml
+  - auth_service/service.yaml
+  - auth_service/config.yaml
+  # auth postgres
+  - postgres/deployment.yaml
+  - postgres/service.yaml
+  - postgres/pvc.yaml
+  # community service
+  - community_service/deployment.yaml
+  - community_service/service.yaml
+  - community_service/config.yaml
+  # community postgres
+  - community_postgres/deployment.yaml
+  - community_postgres/service.yaml
+  - community_postgres/pvc.yaml
+  # ingress
+  - ingress.yaml

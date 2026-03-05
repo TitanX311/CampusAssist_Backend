@@ -21,3 +21,10 @@ spec:
                 name: auth-service
                 port:
                   number: 80
+          - path: /api/community
+            pathType: Prefix
+            backend:
+              service:
+                name: community-service
+                port:
+                  number: 80

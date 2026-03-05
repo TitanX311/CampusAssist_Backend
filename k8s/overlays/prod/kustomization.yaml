@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Production overlay — namespace: default, versioned image tags.
+# Run `bash k8s/generate-secrets.sh prod` before applying to generate secret.yaml files.
+# Deploy: kubectl apply -k k8s/overlays/prod
+
+namespace: default
+
+resources:
+  - ../../base
+  # generated secrets (git-ignored) — run generate-secrets.sh prod first
+  - auth_service/secret.yaml
+  - postgres/secret.yaml
+  - community_service/secret.yaml
+  - community_postgres/secret.yaml

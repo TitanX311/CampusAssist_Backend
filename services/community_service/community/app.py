@@ -22,6 +22,9 @@ app = FastAPI(
     title=settings.APP_NAME,
     debug=settings.DEBUG,
     lifespan=lifespan,
+    docs_url="/api/community/docs" if settings.DEBUG else None,
+    redoc_url="/api/community/redoc" if settings.DEBUG else None,
+    openapi_url="/api/community/openapi.json" if settings.DEBUG else None,
 )
 
 app.include_router(health_router, prefix="/api")
