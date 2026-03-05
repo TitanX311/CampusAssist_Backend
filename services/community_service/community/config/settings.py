@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     PORT: int = 8000
     DATABASE_URL: str
 
+    # JWT — must match the SECRET_KEY and ALGORITHM used by auth_service
+    SECRET_KEY: str
+    ALGORITHM: str = "HS256"
+
     model_config = SettingsConfigDict(
         env_file="services/community_service/.env",
         env_file_encoding="utf-8",

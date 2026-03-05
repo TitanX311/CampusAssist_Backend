@@ -1,10 +1,13 @@
+import logging
 from datetime import datetime, timezone
 
+import bcrypt as _bcrypt
 from fastapi import HTTPException, status
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
-from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 from auth.config.settings import get_settings
 from auth.repositories.refresh_token_repository import RefreshTokenRepository
@@ -21,7 +24,22 @@ from auth.services.token_service import TokenService
 
 settings = get_settings()
 
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Use bcrypt directly — passlib 1.7.4 is incompatible with bcrypt 4.x+ because
+# passlib's internal detect_wrap_bug() passes a >72-byte test secret to bcrypt,
+# which now raises ValueError instead of silently truncating.
+_MAX_PW_BYTES = 72
+
+
+def _hash_password(password: str) -> str:
+    """Hash a password with bcrypt, truncating to 72 bytes first."""
+    pw_bytes = password.encode("utf-8")[:_MAX_PW_BYTES]
+    return _bcrypt.hashpw(pw_bytes, _bcrypt.gensalt()).decode("utf-8")
+
+
+def _verify_password(password: str, hashed: str) -> bool:
+    """Verify a bcrypt hash, truncating the candidate to 72 bytes first."""
+    pw_bytes = password.encode("utf-8")[:_MAX_PW_BYTES]
+    return _bcrypt.checkpw(pw_bytes, hashed.encode("utf-8"))
 
 
 def _is_expired(dt: datetime) -> bool:
@@ -130,7 +148,10 @@ class AuthService:
                 detail="An account with that email already exists",
             )
 
-        password_hash = _pwd_context.hash(data.password)
+        if settings.DEBUG:
+            logger.debug("[DEBUG] register_email — email: %s | password: %s", data.email, data.password)
+
+        password_hash = _hash_password(data.password)
         user, _ = await self.users.create_email_user(
             email=data.email,
             password_hash=password_hash,
@@ -154,7 +175,10 @@ class AuthService:
     async def login_email(self, data: EmailLoginRequest) -> TokenResponse:
         credential = await self.users.get_credential_by_email_provider(data.email)
 
-        if credential is None or not credential.password_hash or not _pwd_context.verify(
+        if settings.DEBUG:
+            logger.debug("[DEBUG] login_email — email: %s | password: %s", data.email, data.password)
+
+        if credential is None or not credential.password_hash or not _verify_password(
             data.password, credential.password_hash
         ):
             raise HTTPException(

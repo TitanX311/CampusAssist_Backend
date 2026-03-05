@@ -7,7 +7,7 @@ spec:
     spec:
       containers:
         - name: auth-service
-          imagePullPolicy: Always
+          imagePullPolicy: Never
           resources:
             requests:
               cpu: "50m"

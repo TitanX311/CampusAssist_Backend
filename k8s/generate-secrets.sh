@@ -158,10 +158,16 @@ if [[ ! -f "$COMMUNITY_ENV_FILE" ]]; then
 fi
 
 COMMUNITY_DATABASE_URL="$(parse_env "$COMMUNITY_ENV_FILE" DATABASE_URL)"
-if [[ -z "$COMMUNITY_DATABASE_URL" ]]; then
-  echo "ERROR: DATABASE_URL is missing or empty in $COMMUNITY_ENV_FILE"
-  exit 1
-fi
+COMMUNITY_SECRET_KEY="$(parse_env "$COMMUNITY_ENV_FILE" SECRET_KEY)"
+
+missing=0
+for var in COMMUNITY_DATABASE_URL COMMUNITY_SECRET_KEY; do
+  if [[ -z "${!var}" ]]; then
+    echo "ERROR: $var is missing or empty in $COMMUNITY_ENV_FILE"
+    missing=1
+  fi
+done
+[[ $missing -eq 1 ]] && exit 1
 
 parse_db_url "$COMMUNITY_DATABASE_URL"
 for var in PG_USER PG_PASSWORD PG_DB; do
@@ -203,6 +209,7 @@ metadata:
 type: Opaque
 stringData:
   DATABASE_URL: "${COMMUNITY_K8S_DATABASE_URL}"
+  SECRET_KEY: "${COMMUNITY_SECRET_KEY}"
 EOF
 echo "Generated: $OVERLAY_DIR/community_service/secret.yaml"
 

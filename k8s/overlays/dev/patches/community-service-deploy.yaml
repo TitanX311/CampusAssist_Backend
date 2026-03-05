@@ -7,7 +7,7 @@ spec:
     spec:
       containers:
         - name: community-service
-          imagePullPolicy: Always
+          imagePullPolicy: Never
           resources:
             requests:
               cpu: "50m"

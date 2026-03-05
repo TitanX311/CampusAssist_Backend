@@ -5,6 +5,8 @@ from fastapi import FastAPI
 from community.config.database import engine
 from community.config.settings import get_settings
 from community.models.base import Base
+from community.models.community import Community  # noqa: F401 — registers table with metadata
+from community.routes.community import router as community_router
 from community.routes.health import router as health_router
 
 
@@ -28,3 +30,4 @@ app = FastAPI(
 )
 
 app.include_router(health_router, prefix="/api")
+app.include_router(community_router, prefix="/api")
