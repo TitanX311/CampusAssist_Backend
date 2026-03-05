@@ -68,3 +68,10 @@ class JoinCommunityResponse(BaseModel):
     # 'requested' — user is in the pending list (PRIVATE community)
     status: str
     message: str
+
+
+class LeaveCommunityResponse(BaseModel):
+    """Result of a leave action."""
+
+    community_id: str
+    message: str
