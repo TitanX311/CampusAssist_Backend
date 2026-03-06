@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: search-service-config
+  namespace: default
+  labels:
+    app: search-service
+data:
+  APP_NAME: "Search Service"
+  DEBUG: "false"
+  HOST: "0.0.0.0"
+  PORT: "8005"
+  COLLEGE_SERVICE_URL: "http://college-service:80"
+  COMMUNITY_SERVICE_URL: "http://community-service:80"
+  SYNC_INTERVAL_SECONDS: "300"

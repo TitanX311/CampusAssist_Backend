@@ -63,3 +63,10 @@ spec:
                 name: admin-service
                 port:
                   number: 80
+          - path: /api/search
+            pathType: Prefix
+            backend:
+              service:
+                name: search-service
+                port:
+                  number: 80

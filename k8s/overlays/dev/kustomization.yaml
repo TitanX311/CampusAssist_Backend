@@ -26,6 +26,8 @@ resources:
   - college_service/secret.yaml
   - college_postgres/secret.yaml
   - admin_service/secret.yaml
+  - search_service/secret.yaml
+  - search_postgres/secret.yaml
 
   # docs hub — dev only
   - docs_service/deployment.yaml
@@ -46,6 +48,8 @@ images:
   - name: darshanpanzade2006/campus_assist_college
     newTag: dev
   - name: darshanpanzade2006/campus_assist_admin
+    newTag: dev
+  - name: darshanpanzade2006/campus_assist_search
     newTag: dev
   - name: darshanpanzade2006/campus_assist_docs
     newTag: dev
@@ -76,5 +80,9 @@ patches:
   # Admin service
   - path: patches/admin-service-config.yaml
   - path: patches/admin-service-deploy.yaml
+  # Search service
+  - path: patches/search-service-config.yaml
+  - path: patches/search-service-deploy.yaml
+  - path: patches/search-postgres-deploy.yaml
   # Scope dev ingress to its own hostname to avoid route collision with prod
   - path: patches/ingress.yaml

@@ -23,6 +23,7 @@ case "$ENV" in
     ATTACHMENT_ENV_FILE="$SCRIPT_DIR/../services/attachment_service/.env"
     COLLEGE_ENV_FILE="$SCRIPT_DIR/../services/college_service/.env"
     ADMIN_ENV_FILE="$SCRIPT_DIR/../services/admin_service/.env"
+    SEARCH_ENV_FILE="$SCRIPT_DIR/../services/search_service/.env"
     OVERLAY_DIR="$SCRIPT_DIR/overlays/dev"
     PG_SERVICE="postgres-service"
     COMMUNITY_PG_SERVICE="community-postgres-service"
@@ -30,6 +31,7 @@ case "$ENV" in
     COMMENT_PG_SERVICE="comment-postgres-service"
     ATTACHMENT_PG_SERVICE="attachment-postgres-service"
     COLLEGE_PG_SERVICE="college-postgres-service"
+    SEARCH_PG_SERVICE="search-postgres-service"
     ;;
   prod)
     AUTH_ENV_FILE="$SCRIPT_DIR/../services/auth_service/.env.prod"
@@ -39,6 +41,7 @@ case "$ENV" in
     ATTACHMENT_ENV_FILE="$SCRIPT_DIR/../services/attachment_service/.env.prod"
     COLLEGE_ENV_FILE="$SCRIPT_DIR/../services/college_service/.env.prod"
     ADMIN_ENV_FILE="$SCRIPT_DIR/../services/admin_service/.env.prod"
+    SEARCH_ENV_FILE="$SCRIPT_DIR/../services/search_service/.env.prod"
     OVERLAY_DIR="$SCRIPT_DIR/overlays/prod"
     PG_SERVICE="postgres-service"
     COMMUNITY_PG_SERVICE="community-postgres-service"
@@ -46,6 +49,7 @@ case "$ENV" in
     COMMENT_PG_SERVICE="comment-postgres-service"
     ATTACHMENT_PG_SERVICE="attachment-postgres-service"
     COLLEGE_PG_SERVICE="college-postgres-service"
+    SEARCH_PG_SERVICE="search-postgres-service"
     ;;
   *)
     echo "ERROR: Unknown environment '$ENV'. Use 'dev' or 'prod'."
@@ -541,4 +545,69 @@ stringData:
   SECRET_KEY: "${ADMIN_SECRET_KEY}"
 EOF
   echo "Generated: $OVERLAY_DIR/admin_service/secret.yaml"
+fi
+
+# ===========================================================================
+# SEARCH SERVICE + SEARCH POSTGRES
+# ===========================================================================
+if [[ ! -f "$SEARCH_ENV_FILE" ]]; then
+  echo "WARNING: Search .env file not found: $SEARCH_ENV_FILE"
+  echo "  Skipping search_service secret generation."
+  echo "  Create $SEARCH_ENV_FILE with DATABASE_URL and SECRET_KEY."
+else
+  SEARCH_DATABASE_URL="$(parse_env "$SEARCH_ENV_FILE" DATABASE_URL)"
+  SEARCH_SECRET_KEY="$(parse_env "$SEARCH_ENV_FILE" SECRET_KEY)"
+
+  missing=0
+  for var in SEARCH_DATABASE_URL SEARCH_SECRET_KEY; do
+    if [[ -z "${!var}" ]]; then
+      echo "ERROR: $var is missing or empty in $SEARCH_ENV_FILE"
+      missing=1
+    fi
+  done
+  [[ $missing -eq 1 ]] && exit 1
+
+  parse_db_url "$SEARCH_DATABASE_URL"
+  for var in PG_USER PG_PASSWORD PG_DB; do
+    if [[ -z "${!var}" ]]; then
+      echo "ERROR: Could not parse $var from DATABASE_URL in $SEARCH_ENV_FILE"
+      exit 1
+    fi
+  done
+  SEARCH_PG_USER="$PG_USER"
+  SEARCH_PG_PASSWORD="$PG_PASSWORD"
+  SEARCH_PG_DB="$PG_DB"
+
+  SEARCH_K8S_DATABASE_URL="$(k8s_db_url "$SEARCH_DATABASE_URL" "$SEARCH_PG_SERVICE")"
+
+  mkdir -p "$OVERLAY_DIR/search_postgres"
+  cat > "$OVERLAY_DIR/search_postgres/secret.yaml" <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: search-postgres-secret
+  labels:
+    app: search-postgres
+type: Opaque
+stringData:
+  POSTGRES_USER: "${SEARCH_PG_USER}"
+  POSTGRES_PASSWORD: "${SEARCH_PG_PASSWORD}"
+  POSTGRES_DB: "${SEARCH_PG_DB}"
+EOF
+  echo "Generated: $OVERLAY_DIR/search_postgres/secret.yaml"
+
+  mkdir -p "$OVERLAY_DIR/search_service"
+  cat > "$OVERLAY_DIR/search_service/secret.yaml" <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: search-service-secret
+  labels:
+    app: search-service
+type: Opaque
+stringData:
+  DATABASE_URL: "${SEARCH_K8S_DATABASE_URL}"
+  SECRET_KEY: "${SEARCH_SECRET_KEY}"
+EOF
+  echo "Generated: $OVERLAY_DIR/search_service/secret.yaml"
 fi

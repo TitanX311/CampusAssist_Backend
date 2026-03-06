@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: search-service-config
+data:
+  DEBUG: "true"
+  SYNC_INTERVAL_SECONDS: "120"
