@@ -23,6 +23,13 @@ resources:
   - attachment_service/secret.yaml
   - attachment_postgres/secret.yaml
   - minio/secret.yaml
+  - college_service/secret.yaml
+  - college_postgres/secret.yaml
+  - admin_service/secret.yaml
+
+  # docs hub — dev only
+  - docs_service/deployment.yaml
+  - docs_service/service.yaml
 
 # Use :dev image tags built locally with nerdctl
 images:
@@ -35,6 +42,12 @@ images:
   - name: darshanpanzade2006/campus_assist_comment
     newTag: dev
   - name: darshanpanzade2006/campus_assist_attachment
+    newTag: dev
+  - name: darshanpanzade2006/campus_assist_college
+    newTag: dev
+  - name: darshanpanzade2006/campus_assist_admin
+    newTag: dev
+  - name: darshanpanzade2006/campus_assist_docs
     newTag: dev
 
 patches:
@@ -56,5 +69,12 @@ patches:
   - path: patches/attachment-service-deploy.yaml
   - path: patches/attachment-postgres-deploy.yaml
   - path: patches/minio-deploy.yaml
+  # College service
+  - path: patches/college-service-config.yaml
+  - path: patches/college-service-deploy.yaml
+  - path: patches/college-postgres-deploy.yaml
+  # Admin service
+  - path: patches/admin-service-config.yaml
+  - path: patches/admin-service-deploy.yaml
   # Scope dev ingress to its own hostname to avoid route collision with prod
   - path: patches/ingress.yaml

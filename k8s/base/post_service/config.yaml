@@ -14,3 +14,4 @@ data:
   GRPC_PORT: "50053"
   COMMUNITY_GRPC_TARGET: "community-service:50052"
   ATTACHMENT_GRPC_TARGET: "attachment-service:50054"
+  AUTH_GRPC_TARGET: "auth-service:50051"

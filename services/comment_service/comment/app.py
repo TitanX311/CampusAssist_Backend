@@ -8,6 +8,7 @@ from comment.models.base import Base
 from comment.models.comment import Comment  # noqa: F401 — registers table with metadata
 from comment.routes.health import router as health_router
 from comment.routes.comment import router as comment_router
+from comment.routes.admin import admin_router
 from comment.grpc import clients as grpc_clients
 
 
@@ -32,4 +33,5 @@ app = FastAPI(
 )
 
 app.include_router(health_router, prefix="/api")
+app.include_router(admin_router, prefix="/api")
 app.include_router(comment_router, prefix="/api")

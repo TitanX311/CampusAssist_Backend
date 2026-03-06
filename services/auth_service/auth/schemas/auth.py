@@ -51,3 +51,21 @@ class RefreshRequest(BaseModel):
 
 class LogoutRequest(BaseModel):
     refresh_token: str
+
+
+class VerifyEmailRequest(BaseModel):
+    """Token extracted from the verification link."""
+
+    token: str
+
+
+class ResendVerificationRequest(BaseModel):
+    """Request a fresh verification email for the given address."""
+
+    email: EmailStr
+
+
+class MessageResponse(BaseModel):
+    """Generic single-message response."""
+
+    message: str

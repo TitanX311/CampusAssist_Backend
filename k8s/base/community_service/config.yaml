@@ -11,3 +11,5 @@ data:
   HOST: "0.0.0.0"
   PORT: "8000"
   GRPC_PORT: "50052"
+  COLLEGE_GRPC_TARGET: "college-service:50055"
+  AUTH_GRPC_TARGET: "auth-service:50051"

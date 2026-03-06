@@ -14,3 +14,4 @@ data:
   MINIO_BUCKET: "campus-assist"
   MINIO_SECURE: "false"
   GRPC_PORT: "50054"
+  AUTH_GRPC_TARGET: "auth-service:50051"

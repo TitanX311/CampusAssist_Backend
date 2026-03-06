@@ -75,3 +75,19 @@ class LeaveCommunityResponse(BaseModel):
 
     community_id: str
     message: str
+
+
+class PendingRequestsResponse(BaseModel):
+    """Pending join requests for a PRIVATE community."""
+
+    community_id: str
+    requested_users: list[uuid.UUID]
+    total: int
+
+
+class ApproveRejectResponse(BaseModel):
+    """Result of an approve or reject action on a join request."""
+
+    community_id: str
+    user_id: str
+    message: str

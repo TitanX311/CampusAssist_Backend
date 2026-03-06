@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: college-service
+  namespace: default
+  labels:
+    app: college-service
+spec:
+  type: ClusterIP
+  selector:
+    app: college-service
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8001
+      protocol: TCP
+    - name: grpc
+      port: 50055
+      targetPort: 50055
+      protocol: TCP

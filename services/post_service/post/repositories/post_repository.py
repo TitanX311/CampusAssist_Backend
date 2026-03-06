@@ -77,6 +77,25 @@ class PostRepository:
 
         return list(items), total
 
+    async def get_all(
+        self,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[Post], int]:
+        """Return all posts (paginated), newest first. Admin use only."""
+        total = (
+            await self.db.execute(select(func.count()).select_from(Post))
+        ).scalar_one()
+        items = (
+            await self.db.execute(
+                select(Post)
+                .order_by(Post.created_at.desc())
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
+        ).scalars().all()
+        return list(items), total
+
     # ------------------------------------------------------------------
     # Create / update / delete
     # ------------------------------------------------------------------

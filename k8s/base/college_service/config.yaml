@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: college-service-config
+  namespace: default
+  labels:
+    app: college-service
+data:
+  APP_NAME: "College Service"
+  DEBUG: "false"
+  HOST: "0.0.0.0"
+  PORT: "8001"
+  GRPC_PORT: "50055"
+  COLLEGE_GRPC_TARGET: "college-service:50055"
+  AUTH_GRPC_TARGET: "auth-service:50051"

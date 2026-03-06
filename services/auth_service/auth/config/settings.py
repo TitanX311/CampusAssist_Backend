@@ -33,6 +33,23 @@ class Settings(BaseSettings):
     # Google OAuth
     GOOGLE_CLIENT_ID: str
 
+    # gRPC
+    GRPC_PORT: int = 50051
+
+    # SMTP / outbound email
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = ""
+    SMTP_USE_TLS: bool = True
+
+    # Email verification
+    EMAIL_VERIFICATION_EXPIRE_MINUTES: int = 1440  # 24 hours
+    FRONTEND_URL: str = "http://localhost:3000"
+    # Set to True in dev/CI to skip SMTP — links are printed to the log instead.
+    SKIP_EMAIL_VERIFICATION: bool = False
+
 
 @lru_cache
 def get_settings() -> Settings:

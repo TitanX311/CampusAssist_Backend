@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: docs-service
+  labels:
+    app: docs-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: docs-service
+  template:
+    metadata:
+      labels:
+        app: docs-service
+    spec:
+      containers:
+        - name: docs-service
+          image: darshanpanzade2006/campus_assist_docs:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8005
+          livenessProbe:
+            httpGet:
+              path: /api/docs/health
+              port: 8005
+            initialDelaySeconds: 5
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/docs/health
+              port: 8005
+            initialDelaySeconds: 3
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+      restartPolicy: Always

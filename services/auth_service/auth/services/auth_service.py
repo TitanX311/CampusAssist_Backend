@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timezone
 
 import bcrypt as _bcrypt
-from fastapi import HTTPException, status
+from fastapi import BackgroundTasks, HTTPException, status
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,16 +10,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 logger = logging.getLogger(__name__)
 
 from auth.config.settings import get_settings
+from auth.repositories.email_verification_repository import EmailVerificationRepository
 from auth.repositories.refresh_token_repository import RefreshTokenRepository
 from auth.repositories.user_repository import UserRepository
 from auth.schemas.auth import (
     EmailLoginRequest,
     EmailRegisterRequest,
     GoogleAuthRequest,
+    MessageResponse,
     RefreshRequest,
+    ResendVerificationRequest,
     TokenResponse,
     UserResponse,
+    VerifyEmailRequest,
 )
+from auth.services import email_service
 from auth.services.token_service import TokenService
 
 settings = get_settings()
@@ -63,6 +68,7 @@ class AuthService:
     def __init__(self, db: AsyncSession) -> None:
         self.users = UserRepository(db)
         self.refresh_tokens = RefreshTokenRepository(db)
+        self.email_verif = EmailVerificationRepository(db)
 
     # ------------------------------------------------------------------
     # Google OAuth
@@ -140,7 +146,11 @@ class AuthService:
     # Email / password — register
     # ------------------------------------------------------------------
 
-    async def register_email(self, data: EmailRegisterRequest) -> TokenResponse:
+    async def register_email(
+        self,
+        data: EmailRegisterRequest,
+        background_tasks: BackgroundTasks | None = None,
+    ) -> TokenResponse:
         existing = await self.users.get_by_email(data.email)
         if existing:
             raise HTTPException(
@@ -157,6 +167,15 @@ class AuthService:
             password_hash=password_hash,
             name=data.name,
         )
+
+        # Create a verification token and dispatch the email asynchronously.
+        ev_token = await self.email_verif.create(user.id)
+        if background_tasks is not None:
+            background_tasks.add_task(
+                email_service.send_verification_email, user.email, ev_token.token
+            )
+        else:
+            await email_service.send_verification_email(user.email, ev_token.token)
 
         access_token, expires_in = TokenService.create_access_token(user.id)
         refresh_token = await self.refresh_tokens.create(user.id)
@@ -255,3 +274,62 @@ class AuthService:
         token_record = await self.refresh_tokens.get_by_token(refresh_token)
         if token_record and not token_record.revoked:
             await self.refresh_tokens.revoke(token_record)
+
+    # ------------------------------------------------------------------
+    # Email verification
+    # ------------------------------------------------------------------
+
+    async def verify_email(self, data: VerifyEmailRequest) -> MessageResponse:
+        record = await self.email_verif.get_by_token(data.token)
+
+        if record is None or _is_expired(record.expires_at):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired verification token",
+            )
+        if record.used:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Verification token has already been used",
+            )
+
+        user = await self.users.get_by_id(record.user_id)
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User associated with this token no longer exists",
+            )
+
+        if user.email_verified:
+            return MessageResponse(message="Email is already verified")
+
+        await self.email_verif.mark_used(record)
+        await self.users.mark_email_verified(user)
+        return MessageResponse(message="Email verified successfully")
+
+    async def resend_verification(
+        self,
+        data: ResendVerificationRequest,
+        background_tasks: BackgroundTasks | None = None,
+    ) -> MessageResponse:
+        # Always return 200 to prevent email enumeration.
+        _generic = MessageResponse(
+            message=(
+                "If an unverified account exists for that address, "
+                "a new verification link has been sent."
+            )
+        )
+
+        user = await self.users.get_by_email(data.email)
+        if user is None or user.email_verified:
+            return _generic
+
+        ev_token = await self.email_verif.create(user.id)
+        if background_tasks is not None:
+            background_tasks.add_task(
+                email_service.send_verification_email, user.email, ev_token.token
+            )
+        else:
+            await email_service.send_verification_email(user.email, ev_token.token)
+
+        return _generic

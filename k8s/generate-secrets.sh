@@ -21,12 +21,15 @@ case "$ENV" in
     POST_ENV_FILE="$SCRIPT_DIR/../services/post_service/.env"
     COMMENT_ENV_FILE="$SCRIPT_DIR/../services/comment_service/.env"
     ATTACHMENT_ENV_FILE="$SCRIPT_DIR/../services/attachment_service/.env"
+    COLLEGE_ENV_FILE="$SCRIPT_DIR/../services/college_service/.env"
+    ADMIN_ENV_FILE="$SCRIPT_DIR/../services/admin_service/.env"
     OVERLAY_DIR="$SCRIPT_DIR/overlays/dev"
     PG_SERVICE="postgres-service"
     COMMUNITY_PG_SERVICE="community-postgres-service"
     POST_PG_SERVICE="post-postgres-service"
     COMMENT_PG_SERVICE="comment-postgres-service"
     ATTACHMENT_PG_SERVICE="attachment-postgres-service"
+    COLLEGE_PG_SERVICE="college-postgres-service"
     ;;
   prod)
     AUTH_ENV_FILE="$SCRIPT_DIR/../services/auth_service/.env.prod"
@@ -34,12 +37,15 @@ case "$ENV" in
     POST_ENV_FILE="$SCRIPT_DIR/../services/post_service/.env.prod"
     COMMENT_ENV_FILE="$SCRIPT_DIR/../services/comment_service/.env.prod"
     ATTACHMENT_ENV_FILE="$SCRIPT_DIR/../services/attachment_service/.env.prod"
+    COLLEGE_ENV_FILE="$SCRIPT_DIR/../services/college_service/.env.prod"
+    ADMIN_ENV_FILE="$SCRIPT_DIR/../services/admin_service/.env.prod"
     OVERLAY_DIR="$SCRIPT_DIR/overlays/prod"
     PG_SERVICE="postgres-service"
     COMMUNITY_PG_SERVICE="community-postgres-service"
     POST_PG_SERVICE="post-postgres-service"
     COMMENT_PG_SERVICE="comment-postgres-service"
     ATTACHMENT_PG_SERVICE="attachment-postgres-service"
+    COLLEGE_PG_SERVICE="college-postgres-service"
     ;;
   *)
     echo "ERROR: Unknown environment '$ENV'. Use 'dev' or 'prod'."
@@ -440,6 +446,99 @@ stringData:
 EOF
 echo "Generated: $OVERLAY_DIR/minio/secret.yaml"
 
+# ===========================================================================
+# COLLEGE SERVICE + COLLEGE POSTGRES
+# ===========================================================================
+if [[ ! -f "$COLLEGE_ENV_FILE" ]]; then
+  echo "ERROR: .env file not found: $COLLEGE_ENV_FILE"
+  exit 1
+fi
+
+COLLEGE_DATABASE_URL="$(parse_env "$COLLEGE_ENV_FILE" DATABASE_URL)"
+COLLEGE_SECRET_KEY="$(parse_env "$COLLEGE_ENV_FILE" SECRET_KEY)"
+
+missing=0
+for var in COLLEGE_DATABASE_URL COLLEGE_SECRET_KEY; do
+  if [[ -z "${!var}" ]]; then
+    echo "ERROR: $var is missing or empty in $COLLEGE_ENV_FILE"
+    missing=1
+  fi
+done
+[[ $missing -eq 1 ]] && exit 1
+
+parse_db_url "$COLLEGE_DATABASE_URL"
+for var in PG_USER PG_PASSWORD PG_DB; do
+  if [[ -z "${!var}" ]]; then
+    echo "ERROR: Could not parse $var from DATABASE_URL in $COLLEGE_ENV_FILE"
+    exit 1
+  fi
+done
+COLLEGE_PG_USER="$PG_USER"
+COLLEGE_PG_PASSWORD="$PG_PASSWORD"
+COLLEGE_PG_DB="$PG_DB"
+
+COLLEGE_K8S_DATABASE_URL="$(k8s_db_url "$COLLEGE_DATABASE_URL" "$COLLEGE_PG_SERVICE")"
+
+mkdir -p "$OVERLAY_DIR/college_postgres"
+cat > "$OVERLAY_DIR/college_postgres/secret.yaml" <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: college-postgres-secret
+  labels:
+    app: college-postgres
+type: Opaque
+stringData:
+  POSTGRES_USER: "${COLLEGE_PG_USER}"
+  POSTGRES_PASSWORD: "${COLLEGE_PG_PASSWORD}"
+  POSTGRES_DB: "${COLLEGE_PG_DB}"
+EOF
+echo "Generated: $OVERLAY_DIR/college_postgres/secret.yaml"
+
+mkdir -p "$OVERLAY_DIR/college_service"
+cat > "$OVERLAY_DIR/college_service/secret.yaml" <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: college-service-secret
+  labels:
+    app: college-service
+type: Opaque
+stringData:
+  DATABASE_URL: "${COLLEGE_K8S_DATABASE_URL}"
+  SECRET_KEY: "${COLLEGE_SECRET_KEY}"
+EOF
+echo "Generated: $OVERLAY_DIR/college_service/secret.yaml"
+
 echo ""
 echo "Done. Apply with:"
 echo "  kubectl apply -k k8s/overlays/$ENV"
+
+# ===========================================================================
+# ADMIN SERVICE  (no DB — only needs SECRET_KEY)
+# ===========================================================================
+if [[ ! -f "$ADMIN_ENV_FILE" ]]; then
+  echo "WARNING: Admin .env file not found: $ADMIN_ENV_FILE"
+  echo "  Skipping admin_service secret generation."
+  echo "  Create $ADMIN_ENV_FILE with SECRET_KEY=<same-as-auth-service>"
+else
+  ADMIN_SECRET_KEY="$(parse_env "$ADMIN_ENV_FILE" SECRET_KEY)"
+  if [[ -z "$ADMIN_SECRET_KEY" ]]; then
+    echo "ERROR: SECRET_KEY is missing or empty in $ADMIN_ENV_FILE"
+    exit 1
+  fi
+
+  mkdir -p "$OVERLAY_DIR/admin_service"
+  cat > "$OVERLAY_DIR/admin_service/secret.yaml" <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: admin-service-secret
+  labels:
+    app: admin-service
+type: Opaque
+stringData:
+  SECRET_KEY: "${ADMIN_SECRET_KEY}"
+EOF
+  echo "Generated: $OVERLAY_DIR/admin_service/secret.yaml"
+fi

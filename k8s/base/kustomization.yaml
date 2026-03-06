@@ -48,5 +48,17 @@ resources:
   - minio/deployment.yaml
   - minio/service.yaml
   - minio/pvc.yaml
+  # college service
+  - college_service/deployment.yaml
+  - college_service/service.yaml
+  - college_service/config.yaml
+  # college postgres
+  - college_postgres/deployment.yaml
+  - college_postgres/service.yaml
+  - college_postgres/pvc.yaml
+  # admin service (no DB — pure aggregation proxy)
+  - admin_service/deployment.yaml
+  - admin_service/service.yaml
+  - admin_service/config.yaml
   # ingress
   - ingress.yaml

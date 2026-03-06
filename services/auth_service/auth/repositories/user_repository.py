@@ -1,9 +1,9 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth.models.user import User
+from auth.models.user import User, UserType
 from auth.models.user_credential import AuthProvider, UserCredential
 
 
@@ -115,6 +115,40 @@ class UserRepository:
             user.name = name
         if picture is not None:
             user.picture = picture
+        user.updated_at = datetime.now(timezone.utc)
+        await self.db.flush()
+        await self.db.refresh(user)
+        return user
+
+    # ------------------------------------------------------------------
+    # Admin operations
+    # ------------------------------------------------------------------
+
+    async def get_all(self, page: int = 1, page_size: int = 20) -> tuple[list[User], int]:
+        offset = (page - 1) * page_size
+        count_result = await self.db.execute(select(func.count()).select_from(User))
+        total = count_result.scalar_one()
+        result = await self.db.execute(
+            select(User).order_by(User.created_at.desc()).offset(offset).limit(page_size)
+        )
+        return list(result.scalars().all()), total
+
+    async def update_type(self, user: User, new_type: UserType) -> User:
+        user.type = new_type
+        user.updated_at = datetime.now(timezone.utc)
+        await self.db.flush()
+        await self.db.refresh(user)
+        return user
+
+    async def update_active(self, user: User, is_active: bool) -> User:
+        user.is_active = is_active
+        user.updated_at = datetime.now(timezone.utc)
+        await self.db.flush()
+        await self.db.refresh(user)
+        return user
+
+    async def mark_email_verified(self, user: User) -> User:
+        user.email_verified = True
         user.updated_at = datetime.now(timezone.utc)
         await self.db.flush()
         await self.db.refresh(user)

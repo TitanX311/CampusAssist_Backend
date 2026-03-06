@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 class UserType(str, enum.Enum):
     USER = "USER"
     COLLEGE = "COLLEGE"
+    SUPER_ADMIN = "SUPER_ADMIN"
 
 
 class User(Base):

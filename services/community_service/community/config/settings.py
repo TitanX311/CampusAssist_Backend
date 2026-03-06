@@ -16,6 +16,8 @@ class Settings(BaseSettings):
 
     # gRPC
     GRPC_PORT: int = 50052
+    COLLEGE_GRPC_TARGET: str = "college-service:50055"
+    AUTH_GRPC_TARGET: str = "auth-service:50051"
 
     model_config = SettingsConfigDict(
         env_file="services/community_service/.env",

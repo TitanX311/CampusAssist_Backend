@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     GRPC_PORT: int = 50053
     COMMUNITY_GRPC_TARGET: str = "community-service:50052"
     ATTACHMENT_GRPC_TARGET: str = "attachment-service:50054"
+    AUTH_GRPC_TARGET: str = "auth-service:50051"
 
     model_config = SettingsConfigDict(
         env_file="services/post_service/.env",

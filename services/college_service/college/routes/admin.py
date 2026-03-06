@@ -1,0 +1,61 @@
+"""
+Admin-only college management routes — gated by require_super_admin.
+
+GET    /college/admin/list      — list ALL colleges
+DELETE /college/admin/{id}      — force-delete any college (bypasses college-admin check)
+"""
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from college.config.database import get_db
+from college.dependencies.admin import require_super_admin
+from college.dependencies.auth import TokenPayload
+from college.repositories.college_repository import CollegeRepository
+from college.schemas.college import CollegeListResponse, CollegeResponse, DeleteCollegeResponse
+
+admin_router = APIRouter(prefix="/college/admin", tags=["College Admin"])
+
+
+@admin_router.get(
+    "/list",
+    response_model=CollegeListResponse,
+    summary="[Admin] List all colleges",
+    description="Returns every college. Requires SUPER_ADMIN role.",
+)
+async def list_all_colleges(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    _: TokenPayload = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db),
+) -> CollegeListResponse:
+    repo = CollegeRepository(db)
+    items, total = await repo.get_all(page=page, page_size=page_size)
+    return CollegeListResponse(
+        items=[CollegeResponse.model_validate(c) for c in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@admin_router.delete(
+    "/{college_id}",
+    response_model=DeleteCollegeResponse,
+    status_code=status.HTTP_200_OK,
+    summary="[Admin] Force-delete any college",
+    description=(
+        "Permanently deletes a college regardless of who administers it. "
+        "Requires SUPER_ADMIN role."
+    ),
+)
+async def admin_delete_college(
+    college_id: str,
+    _: TokenPayload = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db),
+) -> DeleteCollegeResponse:
+    repo = CollegeRepository(db)
+    college = await repo.get_by_id(college_id)
+    if college is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="College not found.")
+    await repo.delete(college)
+    return DeleteCollegeResponse(college_id=college_id, message="College deleted by admin.")

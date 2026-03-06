@@ -8,8 +8,10 @@ from attachment.models.base import Base
 from attachment.models.attachment import Attachment  # noqa: F401 — registers table with metadata
 from attachment.routes.health import router as health_router
 from attachment.routes.attachment import router as attachment_router
+from attachment.routes.admin import admin_router
 from attachment.storage import minio_client as storage
 from attachment.grpc import server as grpc_server
+from attachment.grpc import auth_client
 
 
 @asynccontextmanager
@@ -24,6 +26,7 @@ async def lifespan(app: FastAPI):
     await grpc_server.serve(_settings.GRPC_PORT)
     yield
     await grpc_server.stop()
+    await auth_client.close()
     await engine.dispose()
 
 
@@ -39,4 +42,5 @@ app = FastAPI(
 )
 
 app.include_router(health_router, prefix="/api")
+app.include_router(admin_router, prefix="/api")
 app.include_router(attachment_router, prefix="/api")

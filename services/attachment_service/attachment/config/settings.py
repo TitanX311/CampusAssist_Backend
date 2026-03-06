@@ -28,6 +28,7 @@ class Settings(BaseSettings):
 
     # gRPC server
     GRPC_PORT: int = 50054
+    AUTH_GRPC_TARGET: str = "auth-service:50051"
 
     # Upload limits
     MAX_UPLOAD_SIZE_MB: int = 50

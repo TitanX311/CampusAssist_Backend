@@ -8,9 +8,11 @@ from post.models.base import Base
 from post.models.post import Post  # noqa: F401 — registers table with metadata
 from post.routes.health import router as health_router
 from post.routes.post import router as post_router
+from post.routes.admin import admin_router
 from post.grpc import server as grpc_server
 from post.grpc import community_client
 from post.grpc import attachment_client
+from post.grpc import auth_client
 
 
 @asynccontextmanager
@@ -23,6 +25,7 @@ async def lifespan(app: FastAPI):
     await grpc_server.stop()
     await community_client.close()
     await attachment_client.close()
+    await auth_client.close()
     await engine.dispose()
 
 
@@ -38,4 +41,5 @@ app = FastAPI(
 )
 
 app.include_router(health_router, prefix="/api")
+app.include_router(admin_router, prefix="/api")
 app.include_router(post_router, prefix="/api")

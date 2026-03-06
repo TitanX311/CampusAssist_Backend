@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package campus_assist;
+
+// CollegeService is served by college_service on its gRPC port (default 50055).
+// Used by community_service to manage college memberships and by other services to look up colleges.
+service CollegeService {
+  // Retrieve a college record by UUID.
+  rpc GetCollege (GetCollegeRequest) returns (GetCollegeResponse);
+
+  // Record that a user is now a member of the college (via one of its communities).
+  rpc RecordMembership (RecordMembershipRequest) returns (RecordMembershipResponse);
+
+  // Remove a user's membership from the college.
+  rpc RemoveMembership (RemoveMembershipRequest) returns (RemoveMembershipResponse);
+}
+
+message GetCollegeRequest {
+  string college_id = 1;
+}
+
+message GetCollegeResponse {
+  bool   found     = 1;
+  string id        = 2;
+  string name      = 3;
+  string contact_email = 4;
+  string physical_address = 5;
+  repeated string admin_users = 6;
+  repeated string communities = 7;
+}
+
+message RecordMembershipRequest {
+  string college_id = 1;
+  string user_id    = 2;
+}
+
+message RecordMembershipResponse {
+  bool   success = 1;
+  string message = 2;
+}
+
+message RemoveMembershipRequest {
+  string college_id = 1;
+  string user_id    = 2;
+}
+
+message RemoveMembershipResponse {
+  bool   success = 1;
+  string message = 2;
+}

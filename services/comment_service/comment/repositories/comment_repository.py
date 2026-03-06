@@ -74,6 +74,25 @@ class CommentRepository:
 
         return list(items), total
 
+    async def get_all(
+        self,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[Comment], int]:
+        """Return all comments (paginated), newest first. Admin use only."""
+        total = (
+            await self.db.execute(select(func.count()).select_from(Comment))
+        ).scalar_one()
+        items = (
+            await self.db.execute(
+                select(Comment)
+                .order_by(Comment.created_at.desc())
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
+        ).scalars().all()
+        return list(items), total
+
     # ------------------------------------------------------------------
     # Create / update / delete
     # ------------------------------------------------------------------

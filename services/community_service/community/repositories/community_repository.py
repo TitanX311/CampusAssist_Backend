@@ -56,6 +56,34 @@ class CommunityRepository:
 
         return list(items), total
 
+    async def get_by_college(
+        self,
+        college_id: str,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[Community], int]:
+        """Return all communities belonging to a given college (paginated).
+
+        Uses Postgres's native @> (array contains) operator:
+            parent_colleges @> ARRAY[<uuid>]
+        """
+        uid = uuid.UUID(college_id)
+        condition = Community.parent_colleges.contains([uid])
+
+        count_query = select(func.count()).select_from(Community).where(condition)
+        total = (await self.db.execute(count_query)).scalar_one()
+
+        items = (
+            await self.db.execute(
+                select(Community)
+                .where(condition)
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
+        ).scalars().all()
+
+        return list(items), total
+
     async def get_all(
         self,
         page: int = 1,

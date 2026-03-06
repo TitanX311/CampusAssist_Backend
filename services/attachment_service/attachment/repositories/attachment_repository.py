@@ -58,6 +58,25 @@ class AttachmentRepository:
 
         return list(items), total
 
+    async def get_all(
+        self,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[Attachment], int]:
+        """Return all attachments (paginated), newest first. Admin use only."""
+        total = (
+            await self.db.execute(select(func.count()).select_from(Attachment))
+        ).scalar_one()
+        items = (
+            await self.db.execute(
+                select(Attachment)
+                .order_by(Attachment.created_at.desc())
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
+        ).scalars().all()
+        return list(items), total
+
     # ------------------------------------------------------------------
     # Create / delete
     # ------------------------------------------------------------------

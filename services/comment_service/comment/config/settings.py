@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     # gRPC targets
     COMMUNITY_GRPC_TARGET: str = "community-service:50052"
     POST_GRPC_TARGET: str = "post-service:50053"
+    AUTH_GRPC_TARGET: str = "auth-service:50051"
 
     model_config = {
         "env_file": "services/comment_service/.env",

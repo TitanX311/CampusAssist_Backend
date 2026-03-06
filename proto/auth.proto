@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package campus_assist;
+
+// AuthService is served by auth_service on its gRPC port (default 50051).
+// Other services call it to look up user details by ID without making HTTP calls.
+service AuthService {
+  // Retrieve a user record by UUID.
+  rpc GetUser (GetUserRequest) returns (GetUserResponse);
+}
+
+message GetUserRequest {
+  string user_id = 1;
+}
+
+message GetUserResponse {
+  bool   found    = 1;
+  string id       = 2;
+  string email    = 3;
+  string name     = 4;
+  string picture  = 5;
+  string type     = 6;   // "USER", "COLLEGE", or "SUPER_ADMIN"
+  bool   is_active = 7;
+}

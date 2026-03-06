@@ -83,7 +83,9 @@ async def remove_comment(target: str, post_id: str, comment_id: str):
 # ---------------------------------------------------------------------------
 
 async def close_all() -> None:
+    from comment.grpc import auth_client as _auth_client
     global _community_channel, _community_stub, _post_channel, _post_stub
+    await _auth_client.close()
     if _community_channel is not None:
         await _community_channel.close()
         _community_channel = None

@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admin-service
+  namespace: default
+  labels:
+    app: admin-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: admin-service
+  template:
+    metadata:
+      labels:
+        app: admin-service
+    spec:
+      containers:
+        - name: admin-service
+          image: darshanpanzade2006/campus_assist_admin:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8005
+          envFrom:
+            - configMapRef:
+                name: admin-service-config
+            - secretRef:
+                name: admin-service-secret
+          livenessProbe:
+            httpGet:
+              path: /api/admin/health
+              port: 8005
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/admin/health
+              port: 8005
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+      restartPolicy: Always

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, BackgroundTasks, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.config.database import get_db
@@ -7,8 +7,11 @@ from auth.schemas.auth import (
     EmailRegisterRequest,
     GoogleAuthRequest,
     LogoutRequest,
+    MessageResponse,
     RefreshRequest,
+    ResendVerificationRequest,
     TokenResponse,
+    VerifyEmailRequest,
 )
 from auth.services.auth_service import AuthService
 
@@ -94,9 +97,11 @@ async def google_auth(data: GoogleAuthRequest, db: AsyncSession = Depends(get_db
     },
 )
 async def register_email(
-    data: EmailRegisterRequest, db: AsyncSession = Depends(get_db)
+    data: EmailRegisterRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
 ):
-    return await AuthService(db).register_email(data)
+    return await AuthService(db).register_email(data, background_tasks=background_tasks)
 
 
 @router.post(
@@ -167,3 +172,60 @@ async def refresh(data: RefreshRequest, db: AsyncSession = Depends(get_db)):
 )
 async def logout(data: LogoutRequest, db: AsyncSession = Depends(get_db)):
     await AuthService(db).logout(data.refresh_token)
+
+
+@router.post(
+    "/email/verify",
+    response_model=MessageResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Verify email address",
+    description=(
+        "Consume a single-use verification token from the link emailed after "
+        "registration.\n\n"
+        "**Flow:**\n"
+        "1. User registers → server sends a verification email with a link "
+        "containing `?token=<token>`.\n"
+        "2. Client extracts `token` from the URL and calls this endpoint.\n"
+        "3. On success the account's `email_verified` flag is set to `true`.\n\n"
+        "**After verification** the client should call `POST /api/auth/refresh` to "
+        "receive a fresh token pair with `email_verified: true` in the response."
+    ),
+    responses={
+        200: {"description": "Email verified (or already verified)"},
+        400: {
+            "description": "Token invalid, expired, or already used",
+            "content": {"application/json": {"example": {"detail": "Invalid or expired verification token"}}},
+        },
+        422: _ERROR_422,
+    },
+)
+async def verify_email(
+    data: VerifyEmailRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    return await AuthService(db).verify_email(data)
+
+
+@router.post(
+    "/email/resend",
+    response_model=MessageResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Re-send verification email",
+    description=(
+        "Request a new email-verification link.\n\n"
+        "Always returns `200 OK` to prevent email enumeration — even if the address "
+        "is unknown or already verified, the response message is identical.\n\n"
+        "A resend invalidates any previous (unused) verification token for that "
+        "account so only the latest link works."
+    ),
+    responses={
+        200: {"description": "Response sent (or silently skipped)"},
+        422: _ERROR_422,
+    },
+)
+async def resend_verification(
+    data: ResendVerificationRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    return await AuthService(db).resend_verification(data, background_tasks=background_tasks)

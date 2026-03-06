@@ -6,3 +6,6 @@ data:
   DEBUG: "true"
   ACCESS_TOKEN_EXPIRE_MINUTES: "1440"   # 1 day — convenient for dev
   REFRESH_TOKEN_EXPIRE_DAYS: "30"
+  # Skip actual SMTP in dev — verification links are printed to pod logs instead.
+  SKIP_EMAIL_VERIFICATION: "true"
+  FRONTEND_URL: "http://localhost:3000"
