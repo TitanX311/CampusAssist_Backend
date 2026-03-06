@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update as sql_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from post.models.post import Post
@@ -17,6 +17,17 @@ class PostRepository:
 
     async def get_by_id(self, post_id: str) -> Post | None:
         result = await self.db.execute(select(Post).where(Post.id == post_id))
+        return result.scalar_one_or_none()
+
+    async def get_by_id_for_update(self, post_id: str) -> Post | None:
+        """Fetch a post and lock the row (SELECT … FOR UPDATE).
+
+        Use this before any mutation (add_comment, remove_comment, etc.) to prevent
+        concurrent requests racing on the same row's array columns.
+        """
+        result = await self.db.execute(
+            select(Post).where(Post.id == post_id).with_for_update()
+        )
         return result.scalar_one_or_none()
 
     async def get_by_community(
@@ -142,23 +153,32 @@ class PostRepository:
     # ------------------------------------------------------------------
 
     async def increment_views(self, post: Post) -> Post:
-        post.views = post.views + 1
-        post.updated_at = datetime.now(timezone.utc)
-        await self.db.flush()
+        await self.db.execute(
+            sql_update(Post)
+            .where(Post.id == post.id)
+            .values(views=Post.views + 1, updated_at=datetime.now(timezone.utc))
+        )
         await self.db.refresh(post)
         return post
 
     async def add_like(self, post: Post) -> Post:
-        post.likes = post.likes + 1
-        post.updated_at = datetime.now(timezone.utc)
-        await self.db.flush()
+        await self.db.execute(
+            sql_update(Post)
+            .where(Post.id == post.id)
+            .values(likes=Post.likes + 1, updated_at=datetime.now(timezone.utc))
+        )
         await self.db.refresh(post)
         return post
 
     async def remove_like(self, post: Post) -> Post:
-        post.likes = max(0, post.likes - 1)
-        post.updated_at = datetime.now(timezone.utc)
-        await self.db.flush()
+        await self.db.execute(
+            sql_update(Post)
+            .where(Post.id == post.id)
+            .values(
+                likes=func.greatest(Post.likes - 1, 0),
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
         await self.db.refresh(post)
         return post
 

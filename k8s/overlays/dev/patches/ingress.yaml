@@ -44,13 +44,6 @@ spec:
                 name: comment-service
                 port:
                   number: 80
-          - path: /api/attachments
-            pathType: Prefix
-            backend:
-              service:
-                name: attachment-service
-                port:
-                  number: 80
           - path: /api/college
             pathType: Prefix
             backend:

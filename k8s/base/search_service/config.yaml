@@ -13,3 +13,5 @@ data:
   COLLEGE_SERVICE_URL: "http://college-service:80"
   COMMUNITY_SERVICE_URL: "http://community-service:80"
   SYNC_INTERVAL_SECONDS: "300"
+  REDIS_URL: "redis://redis-service:6379/0"
+  CACHE_TTL_SECONDS: "60"

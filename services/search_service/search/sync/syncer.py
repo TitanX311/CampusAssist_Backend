@@ -128,6 +128,16 @@ async def sync_all(settings: Any, session_factory: Any) -> dict[str, Any]:
         logger.error("Sync failed: %s", exc)
         stats["errors"].append(f"fatal: {exc}")
 
+    # ── Invalidate the Redis search cache ────────────────────────────────────
+    # Always flush after a sync (even partial) so stale entries are evicted
+    # immediately rather than waiting for TTL expiry.
+    try:
+        from search.cache.backend import get_cache
+        deleted = await get_cache().invalidate()
+        logger.info("Cache invalidated after sync: %d keys deleted", deleted)
+    except Exception as exc:
+        logger.warning("Cache invalidation after sync failed: %s", exc)
+
     stats["duration_seconds"] = round(time.monotonic() - t0, 2)
     return stats
 

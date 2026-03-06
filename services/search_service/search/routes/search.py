@@ -13,7 +13,9 @@ from typing import Literal
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from search.cache.backend import get_cache
 from search.config.database import get_db
+from search.config.settings import Settings, get_settings
 from search.repositories.search_repository import SearchRepository
 from search.schemas.search import SearchResponse, SearchResultItem
 
@@ -43,25 +45,42 @@ async def search(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=50),
     db: AsyncSession = Depends(get_db),
+    settings: Settings = Depends(get_settings),
 ) -> SearchResponse:
+    cache = get_cache()
+
+    # ── Cache hit ────────────────────────────────────────────────────────────
+    cached = await cache.get(q, type, college_id, page, page_size)
+    if cached is not None:
+        items_raw, total = cached
+        return SearchResponse(
+            query=q,
+            type_filter=type,
+            items=[SearchResultItem(**i) for i in items_raw],
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
+
+    # ── Cache miss — query DB ────────────────────────────────────────────────
     repo = SearchRepository(db)
-    items: list[dict] = []
+    raw: list[dict] = []
     total = 0
 
     if type == "college":
         raw, total = await repo.search_colleges(q, page, page_size)
-        items = raw
     elif type == "community":
         raw, total = await repo.search_communities(q, page, page_size, college_id)
-        items = raw
     else:
         raw, total = await repo.search_all(q, page, page_size)
-        items = raw
+
+    # ── Store in cache ───────────────────────────────────────────────────────
+    await cache.set(q, type, college_id, page, page_size, raw, total, settings.CACHE_TTL_SECONDS)
 
     return SearchResponse(
         query=q,
         type_filter=type,
-        items=[SearchResultItem(**i) for i in items],
+        items=[SearchResultItem(**i) for i in raw],
         total=total,
         page=page,
         page_size=page_size,

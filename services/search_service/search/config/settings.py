@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     # Background auto-sync interval in seconds (0 = disabled)
     SYNC_INTERVAL_SECONDS: int = 300  # every 5 minutes
 
+    # Redis cache
+    REDIS_URL: str = "redis://redis-service:6379/0"
+    CACHE_TTL_SECONDS: int = 60  # search results cached for 60 seconds
+
     model_config = SettingsConfigDict(
         env_file="services/search_service/.env",
         env_file_encoding="utf-8",

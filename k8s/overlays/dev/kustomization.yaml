@@ -84,5 +84,8 @@ patches:
   - path: patches/search-service-config.yaml
   - path: patches/search-service-deploy.yaml
   - path: patches/search-postgres-deploy.yaml
+  # Redis cache
+  - path: patches/redis-deploy.yaml
   # Scope dev ingress to its own hostname to avoid route collision with prod
   - path: patches/ingress.yaml
+  - path: patches/ingress-attachments.yaml

@@ -258,7 +258,7 @@ async def update_post(
     db: AsyncSession = Depends(get_db),
 ) -> PostResponse:
     repo = PostRepository(db)
-    post = await repo.get_by_id(post_id)
+    post = await repo.get_by_id_for_update(post_id)
     if post is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found.")
 
@@ -355,7 +355,7 @@ async def delete_post(
     db: AsyncSession = Depends(get_db),
 ) -> DeletePostResponse:
     repo = PostRepository(db)
-    post = await repo.get_by_id(post_id)
+    post = await repo.get_by_id_for_update(post_id)
     if post is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found.")
 
@@ -367,27 +367,28 @@ async def delete_post(
             detail="You can only delete your own posts.",
         )
 
-    # --- Atomicity: delete attachments from attachment_service first so that
-    #     if this fails the post record is still intact (no dangling UUID refs).
+    # Delete the DB row first (flush — still inside the open transaction).
+    # A post record pointing to non-existent attachment UUIDs is harder to recover
+    # from than orphaned files in attachment_service, so we commit the post deletion
+    # regardless and clean up files on a best-effort basis.
     attachment_ids = [str(a) for a in (post.attachments or [])]
+    await repo.delete(post)
+
+    # Best-effort cleanup of associated attachment objects.
     if attachment_ids:
         target = get_settings().ATTACHMENT_GRPC_TARGET
         try:
-            success, message, failed_ids = await attachment_client.delete_attachments(
+            await attachment_client.delete_attachments(
                 target, attachment_ids, current_user.user_id
             )
         except Exception:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Could not reach attachment service. Try again later.",
-            )
-        if not success:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Could not delete attachments: {message} (failed: {failed_ids})",
+            import logging
+            logging.getLogger(__name__).warning(
+                "delete_post: failed to clean up attachments %s for post %s — "
+                "orphaned files will need manual cleanup.",
+                attachment_ids, post_id,
             )
 
-    await repo.delete(post)
     return DeletePostResponse(post_id=post_id, message="Post deleted successfully.")
 
 
@@ -438,11 +439,11 @@ async def add_comment(
     db: AsyncSession = Depends(get_db),
 ) -> PostResponse:
     repo = PostRepository(db)
-    post = await repo.get_by_id(post_id)
+    post = await repo.get_by_id_for_update(post_id)
     if post is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found.")
 
-    await assert_community_member(str(post.community_id), current_user, request)
+    await assert_community_member(str(post.community_id), current_user)
 
     post = await repo.add_comment(post, str(body.comment_id))
     return PostResponse.model_validate(post)
@@ -477,11 +478,11 @@ async def delete_comment(
     db: AsyncSession = Depends(get_db),
 ) -> PostResponse:
     repo = PostRepository(db)
-    post = await repo.get_by_id(post_id)
+    post = await repo.get_by_id_for_update(post_id)
     if post is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found.")
 
-    await assert_community_member(str(post.community_id), current_user, request)
+    await assert_community_member(str(post.community_id), current_user)
 
     post = await repo.remove_comment(post, comment_id)
     return PostResponse.model_validate(post)

@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: campus-assist-attachments-ingress
+  namespace: default
+  annotations:
+    # Disable request buffering so large uploads stream directly to the
+    # attachment service without nginx holding the entire body in memory first.
+    # This prevents 502/504 errors on files > ~8 MB.
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-body-size: "52m"
+    # Give MinIO enough time to receive and store large files.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: /api/attachments
+            pathType: Prefix
+            backend:
+              service:
+                name: attachment-service
+                port:
+                  number: 80

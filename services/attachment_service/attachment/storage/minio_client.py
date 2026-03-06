@@ -6,16 +6,15 @@ wrapped with ``asyncio.get_running_loop().run_in_executor`` so they don't
 block the FastAPI event loop.
 
 Public surface:
-    ensure_bucket()                    — called once during app lifespan
-    upload_file(key, data, mime)       — store bytes in MinIO
-    download_file_stream(key)          — async generator of 64 KiB chunks
-    delete_file(key)                   — remove object from MinIO
+    ensure_bucket()                           — called once during app lifespan
+    upload_file(key, file_obj, size, mime)    — stream file to MinIO (no full-memory read)
+    download_file_stream(key)                 — async generator of 64 KiB chunks
+    delete_file(key)                          — remove object from MinIO
 """
 
 import asyncio
 from functools import partial
-from io import BytesIO
-from typing import AsyncGenerator
+from typing import AsyncGenerator, BinaryIO
 
 from minio import Minio
 from minio.error import S3Error
@@ -47,26 +46,32 @@ async def ensure_bucket() -> None:
         await loop.run_in_executor(None, client.make_bucket, s.MINIO_BUCKET)
 
 
-async def upload_file(object_key: str, data: bytes, content_type: str) -> None:
+async def upload_file(
+    object_key: str,
+    file_obj: BinaryIO,
+    size: int,
+    content_type: str,
+) -> None:
     """
-    Upload ``data`` to MinIO at ``object_key``.
+    Stream ``file_obj`` to MinIO at ``object_key`` without reading the
+    entire file into memory first.
 
     Args:
-        object_key:   Path inside the bucket, e.g. ``{user_id}/{uuid}/{filename}``.
-        data:         Raw file bytes.
-        content_type: MIME type, e.g. ``image/jpeg``.
+        object_key:   Path inside the bucket.
+        file_obj:     A readable binary file-like object (e.g. UploadFile.file).
+        size:         Total byte length of the file.
+        content_type: MIME type.
     """
     s = get_settings()
     client = _make_client()
     loop = asyncio.get_running_loop()
 
-    stream = BytesIO(data)
     fn = partial(
         client.put_object,
         s.MINIO_BUCKET,
         object_key,
-        stream,
-        len(data),
+        file_obj,
+        size,
         content_type=content_type,
     )
     try:

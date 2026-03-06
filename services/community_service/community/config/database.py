@@ -11,7 +11,14 @@ _db_url = (
     .replace("postgres://", "postgresql+asyncpg://", 1)
 )
 
-engine = create_async_engine(_db_url, echo=settings.DEBUG)
+engine = create_async_engine(
+    _db_url,
+    echo=settings.DEBUG,
+    pool_pre_ping=True,
+    # asyncpg's prepared-statement cache conflicts with SELECT … FOR UPDATE;
+    # disabling it forces the simple-query protocol and fixes the issue.
+    connect_args={"statement_cache_size": 0},
+)
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 

@@ -6,7 +6,7 @@ metadata:
   labels:
     app: campus-assist
   annotations:
-    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-body-size: "52m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
 spec:
@@ -40,13 +40,6 @@ spec:
             backend:
               service:
                 name: comment-service
-                port:
-                  number: 80
-          - path: /api/attachments
-            pathType: Prefix
-            backend:
-              service:
-                name: attachment-service
                 port:
                   number: 80
           - path: /api/college

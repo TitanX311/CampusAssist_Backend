@@ -67,5 +67,9 @@ resources:
   - search_postgres/deployment.yaml
   - search_postgres/service.yaml
   - search_postgres/pvc.yaml
+  # redis cache (shared by search-service)
+  - redis/deployment.yaml
+  - redis/service.yaml
   # ingress
   - ingress.yaml
+  - ingress-attachments.yaml

@@ -27,6 +27,7 @@ from search.routes.health import router as health_router
 from search.routes.search import router as search_router
 from search.routes.sync import router as sync_router
 from search.sync.syncer import background_sync_loop
+from search.cache.backend import init_cache, close_cache
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -43,7 +44,11 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database schema ready")
 
-    # ── 2. Background sync loop ──────────────────────────────────────────────
+    # ── 2. Redis cache ───────────────────────────────────────────────────────
+    await init_cache(settings.REDIS_URL)
+    logger.info("Redis cache ready")
+
+    # ── 3. Background sync loop ──────────────────────────────────────────────
     sync_task = asyncio.create_task(
         background_sync_loop(settings, AsyncSessionLocal),
         name="search-sync-loop",
@@ -58,6 +63,7 @@ async def lifespan(app: FastAPI):
         await sync_task
     except asyncio.CancelledError:
         pass
+    await close_cache()
     await engine.dispose()
 
 

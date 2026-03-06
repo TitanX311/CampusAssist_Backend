@@ -21,6 +21,17 @@ class CommunityRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_by_id_for_update(self, community_id: str) -> Community | None:
+        """Fetch a community and lock the row (SELECT … FOR UPDATE).
+
+        Use this before any mutation (add_member, remove_member, etc.) to prevent
+        concurrent requests from racing on the same row's array columns.
+        """
+        result = await self.db.execute(
+            select(Community).where(Community.id == community_id).with_for_update()
+        )
+        return result.scalar_one_or_none()
+
     async def get_by_name(self, name: str) -> Community | None:
         result = await self.db.execute(
             select(Community).where(Community.name == name)

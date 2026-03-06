@@ -93,9 +93,15 @@ async def upload_attachment(
 ) -> AttachmentResponse:
     settings = get_settings()
 
-    data = await file.read()
+    # Determine file size without loading everything into memory.
+    # FastAPI's UploadFile wraps a SpooledTemporaryFile; we read via the
+    # underlying sync file object to get the true size.
+    file.file.seek(0, 2)         # seek to end (sync — SpooledTemporaryFile)
+    file_size = file.file.tell()
+    file.file.seek(0)            # rewind
+
     max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
-    if len(data) > max_bytes:
+    if file_size > max_bytes:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=f"File exceeds the {settings.MAX_UPLOAD_SIZE_MB} MB size limit.",
@@ -109,7 +115,8 @@ async def upload_attachment(
     content_type = file.content_type or "application/octet-stream"
 
     try:
-        await storage.upload_file(object_key, data, content_type)
+        # Pass the underlying file object directly — no full in-memory read.
+        await storage.upload_file(object_key, file.file, file_size, content_type)
     except RuntimeError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -121,7 +128,7 @@ async def upload_attachment(
         uploader_user_id=current_user.user_id,
         filename=safe_filename,
         content_type=content_type,
-        size=len(data),
+        size=file_size,
         bucket=settings.MINIO_BUCKET,
         object_key=object_key,
     )
@@ -308,7 +315,12 @@ async def delete_attachment(
             detail="You can only manage your own attachments.",
         )
 
-    # Remove from MinIO first — if this fails we keep the DB record intact.
+    # Stage the DB deletion first (flush — still inside the open transaction).
+    # If the MinIO call below raises, the exception propagates through get_db()
+    # which calls session.rollback(), restoring the DB record and keeping it
+    # consistent with the still-existing file in object storage.
+    await repo.delete(attachment)
+
     try:
         await storage.delete_file(attachment.object_key)
     except RuntimeError as exc:
@@ -317,5 +329,4 @@ async def delete_attachment(
             detail=f"Object store error: {exc}",
         )
 
-    await repo.delete(attachment)
     return DeleteAttachmentResponse(attachment_id=attachment_id, message="Attachment deleted successfully.")

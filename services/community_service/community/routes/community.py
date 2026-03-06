@@ -278,7 +278,7 @@ async def join_community(
 ) -> JoinCommunityResponse:
     repo = CommunityRepository(db)
 
-    community = await repo.get_by_id(community_id)
+    community = await repo.get_by_id_for_update(community_id)
     if community is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -369,7 +369,7 @@ async def leave_community(
 ) -> LeaveCommunityResponse:
     repo = CommunityRepository(db)
 
-    community = await repo.get_by_id(community_id)
+    community = await repo.get_by_id_for_update(community_id)
     if community is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -418,7 +418,7 @@ async def update_community(
     db: AsyncSession = Depends(get_db),
 ) -> CommunityResponse:
     repo = CommunityRepository(db)
-    community = await repo.get_by_id(community_id)
+    community = await repo.get_by_id_for_update(community_id)
     if community is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Community not found.")
     community = await repo.update(community, name=body.name, type=body.type)
@@ -445,7 +445,7 @@ async def delete_community(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     repo = CommunityRepository(db)
-    community = await repo.get_by_id(community_id)
+    community = await repo.get_by_id_for_update(community_id)
     if community is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Community not found.")
     await repo.delete(community)
@@ -505,7 +505,7 @@ async def approve_join_request(
     db: AsyncSession = Depends(get_db),
 ) -> ApproveRejectResponse:
     repo = CommunityRepository(db)
-    community = await repo.get_by_id(community_id)
+    community = await repo.get_by_id_for_update(community_id)
     if community is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Community not found.")
 
@@ -552,7 +552,7 @@ async def reject_join_request(
     db: AsyncSession = Depends(get_db),
 ) -> ApproveRejectResponse:
     repo = CommunityRepository(db)
-    community = await repo.get_by_id(community_id)
+    community = await repo.get_by_id_for_update(community_id)
     if community is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Community not found.")
 
