@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: post-service
+  namespace: default
+  labels:
+    app: post-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: post-service
+  template:
+    metadata:
+      labels:
+        app: post-service
+    spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z post-postgres-service 5432; do
+                echo "Waiting for post-postgres-service:5432..."
+                sleep 2
+              done
+              echo "PostgreSQL is ready."
+      containers:
+        - name: post-service
+          image: darshanpanzade2006/campus_assist_post:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8002
+            - containerPort: 50053
+              name: grpc
+          envFrom:
+            - configMapRef:
+                name: post-service-config
+            - secretRef:
+                name: post-service-secret
+          livenessProbe:
+            httpGet:
+              path: /api/posts/health
+              port: 8002
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/posts/health
+              port: 8002
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"

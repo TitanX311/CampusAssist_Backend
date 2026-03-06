@@ -16,12 +16,25 @@ resources:
   - postgres/secret.yaml
   - community_service/secret.yaml
   - community_postgres/secret.yaml
+  - post_service/secret.yaml
+  - post_postgres/secret.yaml
+  - comment_service/secret.yaml
+  - comment_postgres/secret.yaml
+  - attachment_service/secret.yaml
+  - attachment_postgres/secret.yaml
+  - minio/secret.yaml
 
 # Use :dev image tags built locally with nerdctl
 images:
   - name: darshanpanzade2006/campus_assist_auth
     newTag: dev
   - name: darshanpanzade2006/campus_assist_community
+    newTag: dev
+  - name: darshanpanzade2006/campus_assist_post
+    newTag: dev
+  - name: darshanpanzade2006/campus_assist_comment
+    newTag: dev
+  - name: darshanpanzade2006/campus_assist_attachment
     newTag: dev
 
 patches:
@@ -33,5 +46,15 @@ patches:
   - path: patches/community-service-deploy.yaml
   - path: patches/postgres-deploy.yaml
   - path: patches/community-postgres-deploy.yaml
+  - path: patches/post-service-config.yaml
+  - path: patches/post-service-deploy.yaml
+  - path: patches/post-postgres-deploy.yaml
+  - path: patches/comment-service-config.yaml
+  - path: patches/comment-service-deploy.yaml
+  - path: patches/comment-postgres-deploy.yaml
+  - path: patches/attachment-service-config.yaml
+  - path: patches/attachment-service-deploy.yaml
+  - path: patches/attachment-postgres-deploy.yaml
+  - path: patches/minio-deploy.yaml
   # Scope dev ingress to its own hostname to avoid route collision with prod
   - path: patches/ingress.yaml

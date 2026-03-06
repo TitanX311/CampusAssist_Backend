@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
 
+    # gRPC
+    GRPC_PORT: int = 50052
+
     model_config = SettingsConfigDict(
         env_file="services/community_service/.env",
         env_file_encoding="utf-8",

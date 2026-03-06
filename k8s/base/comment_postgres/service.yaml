@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: comment-postgres-service
+  namespace: default
+  labels:
+    app: comment-postgres
+spec:
+  type: ClusterIP
+  selector:
+    app: comment-postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+      protocol: TCP

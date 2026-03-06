@@ -14,3 +14,10 @@ resources:
   - postgres/secret.yaml
   - community_service/secret.yaml
   - community_postgres/secret.yaml
+  - post_service/secret.yaml
+  - post_postgres/secret.yaml
+  - comment_service/secret.yaml
+  - comment_postgres/secret.yaml
+  - attachment_service/secret.yaml
+  - attachment_postgres/secret.yaml
+  - minio/secret.yaml

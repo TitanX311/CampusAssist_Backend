@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package campus_assist;
+
+// CommunityService is served by community_service on its gRPC port (default 50052).
+// It exposes a single RPC used by post_service and comment_service to verify
+// that the authenticated user is a member of a given community — replacing the
+// former httpx call to GET /api/community/{id}.
+service CommunityService {
+  rpc CheckMembership (CheckMembershipRequest) returns (CheckMembershipResponse);
+}
+
+message CheckMembershipRequest {
+  // UUID string of the community to look up.
+  string community_id = 1;
+  // UUID string of the user whose membership to check.
+  string user_id = 2;
+}
+
+message CheckMembershipResponse {
+  // True if a community with community_id exists.
+  bool exists = 1;
+  // True if the user is in the community's member_users array.
+  bool is_member = 2;
+  // Human-readable community name (empty when exists=false).
+  string community_name = 3;
+}

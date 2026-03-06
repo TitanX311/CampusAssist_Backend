@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: post-service-config
+  namespace: default
+  labels:
+    app: post-service
+data:
+  APP_NAME: "Post Service"
+  DEBUG: "false"
+  HOST: "0.0.0.0"
+  PORT: "8002"
+  COMMUNITY_SERVICE_URL: "http://community-service:80"
+  GRPC_PORT: "50053"
+  COMMUNITY_GRPC_TARGET: "community-service:50052"
+  ATTACHMENT_GRPC_TARGET: "attachment-service:50054"

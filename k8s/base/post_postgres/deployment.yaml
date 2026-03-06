@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: post-postgres
+  namespace: default
+  labels:
+    app: post-postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: post-postgres
+  strategy:
+    type: Recreate   # required when using a PVC
+  template:
+    metadata:
+      labels:
+        app: post-postgres
+    spec:
+      containers:
+        - name: post-postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: post-postgres-secret
+          volumeMounts:
+            - name: post-postgres-data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 5
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+      volumes:
+        - name: post-postgres-data
+          persistentVolumeClaim:
+            claimName: post-postgres-pvc

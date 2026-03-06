@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: comment-service-config
+  namespace: default
+  labels:
+    app: comment-service
+data:
+  APP_NAME: "Comment Service"
+  DEBUG: "false"
+  HOST: "0.0.0.0"
+  PORT: "8003"
+  COMMUNITY_SERVICE_URL: "http://community-service:80"
+  POST_SERVICE_URL: "http://post-service:80"
+  COMMUNITY_GRPC_TARGET: "community-service:50052"
+  POST_GRPC_TARGET: "post-service:50053"

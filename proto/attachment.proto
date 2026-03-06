@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package attachment;
+
+// ---------------------------------------------------------------------------
+// AttachmentService — internal gRPC interface served by attachment_service.
+//
+// Used by post_service to:
+//   1. ValidateAttachments  — verify that all UUIDs exist and belong to a user
+//   2. DeleteAttachments    — atomically delete a list of attachments (MinIO + DB)
+// ---------------------------------------------------------------------------
+
+service AttachmentService {
+  // Check that every attachment_id exists in the DB and was uploaded by user_id.
+  rpc ValidateAttachments (ValidateAttachmentsRequest) returns (ValidateAttachmentsResponse);
+
+  // Permanently delete a list of attachments from MinIO and the DB.
+  // Ownership is verified when user_id is non-empty.
+  rpc DeleteAttachments (DeleteAttachmentsRequest) returns (DeleteAttachmentsResponse);
+}
+
+// ---------------------------------------------------------------------------
+// ValidateAttachments
+// ---------------------------------------------------------------------------
+
+message ValidateAttachmentsRequest {
+  repeated string attachment_ids = 1;
+  string          user_id        = 2;  // must own every attachment
+}
+
+message ValidateAttachmentsResponse {
+  bool            valid       = 1;  // true iff all IDs exist and belong to user_id
+  repeated string invalid_ids = 2;  // IDs that don't exist or don't belong to user_id
+}
+
+// ---------------------------------------------------------------------------
+// DeleteAttachments
+// ---------------------------------------------------------------------------
+
+message DeleteAttachmentsRequest {
+  repeated string attachment_ids = 1;
+  string          user_id        = 2;  // ownership check; leave empty to skip
+}
+
+message DeleteAttachmentsResponse {
+  bool            success     = 1;
+  string          message     = 2;
+  repeated string failed_ids  = 3;  // IDs that could not be deleted
+}

@@ -16,7 +16,7 @@ from community.schemas.community import (
 
 router = APIRouter(prefix="/community", tags=["Community"])
 
-_COMMUNITY_EXAMPLE = {
+_COMMUNITY_EXAMPLE: dict = {
     "id": "550e8400-e29b-41d4-a716-446655440000",
     "name": "CS Department",
     "type": "PUBLIC",
@@ -92,6 +92,38 @@ async def get_my_communities(
         page=page,
         page_size=page_size,
     )
+
+
+@router.get(
+    "/{community_id}",
+    response_model=CommunityResponse,
+    summary="Get a community by ID",
+    description=(
+        "Returns the full community object for the given ID.\n\n"
+        "**Authentication:** `Authorization: Bearer <access_token>` header required."
+    ),
+    responses={
+        200: {
+            "description": "Community details",
+            "content": {"application/json": {"example": _COMMUNITY_EXAMPLE}},
+        },
+        401: _ERROR_401,
+        404: _ERROR_404,
+    },
+)
+async def get_community(
+    community_id: str,
+    current_user: TokenPayload = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> CommunityResponse:
+    repo = CommunityRepository(db)
+    community = await repo.get_by_id(community_id)
+    if community is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Community not found.",
+        )
+    return CommunityResponse.model_validate(community)
 
 
 @router.post(

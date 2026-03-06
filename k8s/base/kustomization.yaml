@@ -20,5 +20,33 @@ resources:
   - community_postgres/deployment.yaml
   - community_postgres/service.yaml
   - community_postgres/pvc.yaml
+  # post service
+  - post_service/deployment.yaml
+  - post_service/service.yaml
+  - post_service/config.yaml
+  # post postgres
+  - post_postgres/deployment.yaml
+  - post_postgres/service.yaml
+  - post_postgres/pvc.yaml
+  # comment service
+  - comment_service/deployment.yaml
+  - comment_service/service.yaml
+  - comment_service/config.yaml
+  # comment postgres
+  - comment_postgres/deployment.yaml
+  - comment_postgres/service.yaml
+  - comment_postgres/pvc.yaml
+  # attachment service
+  - attachment_service/deployment.yaml
+  - attachment_service/service.yaml
+  - attachment_service/config.yaml
+  # attachment postgres
+  - attachment_postgres/deployment.yaml
+  - attachment_postgres/service.yaml
+  - attachment_postgres/pvc.yaml
+  # minio object storage
+  - minio/deployment.yaml
+  - minio/service.yaml
+  - minio/pvc.yaml
   # ingress
   - ingress.yaml

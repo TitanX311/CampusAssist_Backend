@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: attachment-service
+  namespace: default
+  labels:
+    app: attachment-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: attachment-service
+  template:
+    metadata:
+      labels:
+        app: attachment-service
+    spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z attachment-postgres-service 5432; do
+                echo "Waiting for attachment-postgres-service:5432..."
+                sleep 2
+              done
+              until nc -z minio-service 9000; do
+                echo "Waiting for minio-service:9000..."
+                sleep 2
+              done
+              echo "All dependencies ready."
+      containers:
+        - name: attachment-service
+          image: darshanpanzade2006/campus_assist_attachment:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8004
+          envFrom:
+            - configMapRef:
+                name: attachment-service-config
+            - secretRef:
+                name: attachment-service-secret
+          livenessProbe:
+            httpGet:
+              path: /api/attachments/health
+              port: 8004
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/attachments/health
+              port: 8004
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"

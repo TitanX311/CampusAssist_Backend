@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package campus_assist;
+
+// PostService is served by post_service on its gRPC port (default 50053).
+// It exposes AddComment / RemoveComment RPCs used by comment_service to keep
+// the post's comments UUID array in sync — replacing the former httpx calls to
+// POST/DELETE /api/posts/{post_id}/comments.
+service PostService {
+  rpc AddComment    (PostCommentRequest) returns (PostCommentResponse);
+  rpc RemoveComment (PostCommentRequest) returns (PostCommentResponse);
+}
+
+message PostCommentRequest {
+  // UUID string of the post to update.
+  string post_id = 1;
+  // UUID string of the comment being added or removed.
+  string comment_id = 2;
+}
+
+message PostCommentResponse {
+  bool   success = 1;
+  // Human-readable message (e.g. "Post not found") when success=false.
+  string message = 2;
+}

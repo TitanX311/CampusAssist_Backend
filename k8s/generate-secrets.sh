@@ -18,16 +18,28 @@ case "$ENV" in
   dev)
     AUTH_ENV_FILE="$SCRIPT_DIR/../services/auth_service/.env"
     COMMUNITY_ENV_FILE="$SCRIPT_DIR/../services/community_service/.env"
+    POST_ENV_FILE="$SCRIPT_DIR/../services/post_service/.env"
+    COMMENT_ENV_FILE="$SCRIPT_DIR/../services/comment_service/.env"
+    ATTACHMENT_ENV_FILE="$SCRIPT_DIR/../services/attachment_service/.env"
     OVERLAY_DIR="$SCRIPT_DIR/overlays/dev"
     PG_SERVICE="postgres-service"
     COMMUNITY_PG_SERVICE="community-postgres-service"
+    POST_PG_SERVICE="post-postgres-service"
+    COMMENT_PG_SERVICE="comment-postgres-service"
+    ATTACHMENT_PG_SERVICE="attachment-postgres-service"
     ;;
   prod)
     AUTH_ENV_FILE="$SCRIPT_DIR/../services/auth_service/.env.prod"
     COMMUNITY_ENV_FILE="$SCRIPT_DIR/../services/community_service/.env.prod"
+    POST_ENV_FILE="$SCRIPT_DIR/../services/post_service/.env.prod"
+    COMMENT_ENV_FILE="$SCRIPT_DIR/../services/comment_service/.env.prod"
+    ATTACHMENT_ENV_FILE="$SCRIPT_DIR/../services/attachment_service/.env.prod"
     OVERLAY_DIR="$SCRIPT_DIR/overlays/prod"
     PG_SERVICE="postgres-service"
     COMMUNITY_PG_SERVICE="community-postgres-service"
+    POST_PG_SERVICE="post-postgres-service"
+    COMMENT_PG_SERVICE="comment-postgres-service"
+    ATTACHMENT_PG_SERVICE="attachment-postgres-service"
     ;;
   *)
     echo "ERROR: Unknown environment '$ENV'. Use 'dev' or 'prod'."
@@ -38,6 +50,7 @@ esac
 echo "Generating secrets for environment: $ENV"
 echo "  Auth .env       : $AUTH_ENV_FILE"
 echo "  Community .env  : $COMMUNITY_ENV_FILE"
+echo "  Post .env       : $POST_ENV_FILE"
 echo "  Output dir      : $OVERLAY_DIR"
 echo ""
 
@@ -212,6 +225,220 @@ stringData:
   SECRET_KEY: "${COMMUNITY_SECRET_KEY}"
 EOF
 echo "Generated: $OVERLAY_DIR/community_service/secret.yaml"
+
+# ===========================================================================
+# POST SERVICE + POST POSTGRES
+# ===========================================================================
+if [[ ! -f "$POST_ENV_FILE" ]]; then
+  echo "ERROR: .env file not found: $POST_ENV_FILE"
+  exit 1
+fi
+
+POST_DATABASE_URL="$(parse_env "$POST_ENV_FILE" DATABASE_URL)"
+POST_SECRET_KEY="$(parse_env "$POST_ENV_FILE" SECRET_KEY)"
+
+missing=0
+for var in POST_DATABASE_URL POST_SECRET_KEY; do
+  if [[ -z "${!var}" ]]; then
+    echo "ERROR: $var is missing or empty in $POST_ENV_FILE"
+    missing=1
+  fi
+done
+[[ $missing -eq 1 ]] && exit 1
+
+parse_db_url "$POST_DATABASE_URL"
+for var in PG_USER PG_PASSWORD PG_DB; do
+  if [[ -z "${!var}" ]]; then
+    echo "ERROR: Could not parse $var from DATABASE_URL in $POST_ENV_FILE"
+    exit 1
+  fi
+done
+POST_PG_USER="$PG_USER"
+POST_PG_PASSWORD="$PG_PASSWORD"
+POST_PG_DB="$PG_DB"
+
+POST_K8S_DATABASE_URL="$(k8s_db_url "$POST_DATABASE_URL" "$POST_PG_SERVICE")"
+
+mkdir -p "$OVERLAY_DIR/post_postgres"
+cat > "$OVERLAY_DIR/post_postgres/secret.yaml" <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: post-postgres-secret
+  labels:
+    app: post-postgres
+type: Opaque
+stringData:
+  POSTGRES_USER: "${POST_PG_USER}"
+  POSTGRES_PASSWORD: "${POST_PG_PASSWORD}"
+  POSTGRES_DB: "${POST_PG_DB}"
+EOF
+echo "Generated: $OVERLAY_DIR/post_postgres/secret.yaml"
+
+mkdir -p "$OVERLAY_DIR/post_service"
+cat > "$OVERLAY_DIR/post_service/secret.yaml" <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: post-service-secret
+  labels:
+    app: post-service
+type: Opaque
+stringData:
+  DATABASE_URL: "${POST_K8S_DATABASE_URL}"
+  SECRET_KEY: "${POST_SECRET_KEY}"
+EOF
+echo "Generated: $OVERLAY_DIR/post_service/secret.yaml"
+
+# ===========================================================================
+# COMMENT SERVICE + COMMENT POSTGRES
+# ===========================================================================
+COMMENT_PG_SERVICE="comment-postgres-service"
+
+if [[ ! -f "$COMMENT_ENV_FILE" ]]; then
+  echo "ERROR: .env file not found: $COMMENT_ENV_FILE"
+  exit 1
+fi
+
+COMMENT_DATABASE_URL="$(parse_env "$COMMENT_ENV_FILE" DATABASE_URL)"
+COMMENT_SECRET_KEY="$(parse_env "$COMMENT_ENV_FILE" SECRET_KEY)"
+
+missing=0
+for var in COMMENT_DATABASE_URL COMMENT_SECRET_KEY; do
+  if [[ -z "${!var}" ]]; then
+    echo "ERROR: $var is missing or empty in $COMMENT_ENV_FILE"
+    missing=1
+  fi
+done
+[[ $missing -eq 1 ]] && exit 1
+
+parse_db_url "$COMMENT_DATABASE_URL"
+for var in PG_USER PG_PASSWORD PG_DB; do
+  if [[ -z "${!var}" ]]; then
+    echo "ERROR: Could not parse $var from DATABASE_URL in $COMMENT_ENV_FILE"
+    exit 1
+  fi
+done
+COMMENT_PG_USER="$PG_USER"
+COMMENT_PG_PASSWORD="$PG_PASSWORD"
+COMMENT_PG_DB="$PG_DB"
+
+COMMENT_K8S_DATABASE_URL="$(k8s_db_url "$COMMENT_DATABASE_URL" "$COMMENT_PG_SERVICE")"
+
+mkdir -p "$OVERLAY_DIR/comment_postgres"
+cat > "$OVERLAY_DIR/comment_postgres/secret.yaml" <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: comment-postgres-secret
+  labels:
+    app: comment-postgres
+type: Opaque
+stringData:
+  POSTGRES_USER: "${COMMENT_PG_USER}"
+  POSTGRES_PASSWORD: "${COMMENT_PG_PASSWORD}"
+  POSTGRES_DB: "${COMMENT_PG_DB}"
+EOF
+echo "Generated: $OVERLAY_DIR/comment_postgres/secret.yaml"
+
+mkdir -p "$OVERLAY_DIR/comment_service"
+cat > "$OVERLAY_DIR/comment_service/secret.yaml" <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: comment-service-secret
+  labels:
+    app: comment-service
+type: Opaque
+stringData:
+  DATABASE_URL: "${COMMENT_K8S_DATABASE_URL}"
+  SECRET_KEY: "${COMMENT_SECRET_KEY}"
+EOF
+echo "Generated: $OVERLAY_DIR/comment_service/secret.yaml"
+
+# ===========================================================================
+# ATTACHMENT SERVICE + ATTACHMENT POSTGRES + MINIO
+# ===========================================================================
+if [[ ! -f "$ATTACHMENT_ENV_FILE" ]]; then
+  echo "ERROR: .env file not found: $ATTACHMENT_ENV_FILE"
+  exit 1
+fi
+
+ATTACHMENT_DATABASE_URL="$(parse_env "$ATTACHMENT_ENV_FILE" DATABASE_URL)"
+ATTACHMENT_SECRET_KEY="$(parse_env "$ATTACHMENT_ENV_FILE" SECRET_KEY)"
+ATTACHMENT_MINIO_ACCESS_KEY="$(parse_env "$ATTACHMENT_ENV_FILE" MINIO_ACCESS_KEY)"
+ATTACHMENT_MINIO_SECRET_KEY="$(parse_env "$ATTACHMENT_ENV_FILE" MINIO_SECRET_KEY)"
+
+missing=0
+for var in ATTACHMENT_DATABASE_URL ATTACHMENT_SECRET_KEY ATTACHMENT_MINIO_ACCESS_KEY ATTACHMENT_MINIO_SECRET_KEY; do
+  if [[ -z "${!var}" ]]; then
+    echo "ERROR: $var is missing or empty in $ATTACHMENT_ENV_FILE"
+    missing=1
+  fi
+done
+[[ $missing -eq 1 ]] && exit 1
+
+parse_db_url "$ATTACHMENT_DATABASE_URL"
+for var in PG_USER PG_PASSWORD PG_DB; do
+  if [[ -z "${!var}" ]]; then
+    echo "ERROR: Could not parse $var from DATABASE_URL in $ATTACHMENT_ENV_FILE"
+    exit 1
+  fi
+done
+ATTACHMENT_PG_USER="$PG_USER"
+ATTACHMENT_PG_PASSWORD="$PG_PASSWORD"
+ATTACHMENT_PG_DB="$PG_DB"
+
+ATTACHMENT_K8S_DATABASE_URL="$(k8s_db_url "$ATTACHMENT_DATABASE_URL" "$ATTACHMENT_PG_SERVICE")"
+
+mkdir -p "$OVERLAY_DIR/attachment_postgres"
+cat > "$OVERLAY_DIR/attachment_postgres/secret.yaml" <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: attachment-postgres-secret
+  labels:
+    app: attachment-postgres
+type: Opaque
+stringData:
+  POSTGRES_USER: "${ATTACHMENT_PG_USER}"
+  POSTGRES_PASSWORD: "${ATTACHMENT_PG_PASSWORD}"
+  POSTGRES_DB: "${ATTACHMENT_PG_DB}"
+EOF
+echo "Generated: $OVERLAY_DIR/attachment_postgres/secret.yaml"
+
+mkdir -p "$OVERLAY_DIR/attachment_service"
+cat > "$OVERLAY_DIR/attachment_service/secret.yaml" <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: attachment-service-secret
+  labels:
+    app: attachment-service
+type: Opaque
+stringData:
+  DATABASE_URL: "${ATTACHMENT_K8S_DATABASE_URL}"
+  SECRET_KEY: "${ATTACHMENT_SECRET_KEY}"
+  MINIO_ACCESS_KEY: "${ATTACHMENT_MINIO_ACCESS_KEY}"
+  MINIO_SECRET_KEY: "${ATTACHMENT_MINIO_SECRET_KEY}"
+EOF
+echo "Generated: $OVERLAY_DIR/attachment_service/secret.yaml"
+
+# MinIO root credentials mirror the attachment service MinIO access credentials
+mkdir -p "$OVERLAY_DIR/minio"
+cat > "$OVERLAY_DIR/minio/secret.yaml" <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: minio-secret
+  labels:
+    app: minio
+type: Opaque
+stringData:
+  MINIO_ROOT_USER: "${ATTACHMENT_MINIO_ACCESS_KEY}"
+  MINIO_ROOT_PASSWORD: "${ATTACHMENT_MINIO_SECRET_KEY}"
+EOF
+echo "Generated: $OVERLAY_DIR/minio/secret.yaml"
 
 echo ""
 echo "Done. Apply with:"

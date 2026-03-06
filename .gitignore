@@ -2,7 +2,7 @@ env/
 __pycache__/
 bin/
 .env
-
+venv/
 # Production env files (contain real credentials)
 services/**/.env.prod
 
