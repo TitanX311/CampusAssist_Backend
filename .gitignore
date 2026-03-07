@@ -1,0 +1,77 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# ── Secrets & sensitive config ────────────────────────────────────────────────
+
+# Firebase / Google Services
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+
+# Android local build config (SDK paths, signing info)
+android/local.properties
+android/key.properties
+
+# Android release keystore
+*.jks
+*.keystore
+*.p12
+
+# iOS signing
+ios/Runner/*.mobileprovision
+ios/Runner/*.p8
+ios/Runner/*.p12
+ios/Runner/*.cer
+
+# Environment / secrets files
+.env
+.env.*
+*.env
+secrets.dart
+lib/core/secrets.dart
+lib/core/env.dart
+
+# Flutter --dart-define env files
+dart_defines/
