@@ -8,7 +8,7 @@ metadata:
   name: auth-service-config
 data:
   DEBUG: "false"
-  SKIP_EMAIL_VERIFICATION: "false"
+  SKIP_EMAIL_VERIFICATION: "true"
   FRONTEND_URL: "https://YOUR_DOMAIN_HERE"
   ACCESS_TOKEN_EXPIRE_MINUTES: "30"
   REFRESH_TOKEN_EXPIRE_DAYS: "7"
