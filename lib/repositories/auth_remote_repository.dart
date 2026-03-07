@@ -34,9 +34,9 @@ class AuthRemoteRepository {
   Future<void> initGoogleSignIn() async {
     await _googleSignIn.initialize(
       clientId:
-          '919964734589-qc4hujusfk752sv3lcs58dol2e068gao.apps.googleusercontent.com',
+          '799856146792-226vn03od24ms7ued57l0f6oaviioosi.apps.googleusercontent.com',
       serverClientId:
-          '919964734589-89ak0sbj80p8574tra349f7desihkb84.apps.googleusercontent.com',
+          '799856146792-hhilrj8sqvi95p3pldf8fcqbfvcvpcc7.apps.googleusercontent.com',
     );
   }
 
