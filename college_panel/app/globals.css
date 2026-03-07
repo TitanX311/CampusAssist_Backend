@@ -1,20 +1,137 @@
 @import "tailwindcss";
 
+/* ── Light-mode palette ──────────────────────────────────────────────────── */
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  /* Brand — Calm Trust Blue */
+  --c-brand:           #3A7BD5;
+  --c-brand-hover:     #2F65B4;
+  --c-brand-active:    #244F8F;
+  --c-brand-light:     #EBF2FC;
+  --c-brand-disabled:  #A0AEC0;
+  --c-brand-ring:      #7AA7E6;
+
+  /* Secondary — Community Green */
+  --c-community:       #6BCB77;
+  --c-community-hover: #54B864;
+  --c-community-light: #F0FBF1;
+  --c-community-dark:  #2D7A3A;
+
+  /* Accent — Friendly Orange */
+  --c-accent:          #FFB84C;
+  --c-accent-hover:    #F5A623;
+  --c-accent-light:    #FFF5E0;
+  --c-accent-dark:     #92540A;
+
+  /* Surfaces */
+  --c-app-bg:          #F6F8FB;
+  --c-surface:         #FFFFFF;
+  --c-surface-2:       #F1F3F7;
+  --c-elevated:        #FCFDFF;
+  --c-divider:         #E5E7EB;
+
+  /* Text */
+  --c-text-1:          #2D3748;
+  --c-text-2:          #6B7280;
+  --c-text-3:          #9CA3AF;
+
+  /* Status */
+  --c-success:         #4CAF50;
+  --c-warning:         #F59E0B;
+  --c-error:           #EF4444;
+  --c-info:            #38BDF8;
+
+  /* Legacy compat */
+  --background:        var(--c-app-bg);
+  --foreground:        var(--c-text-1);
+}
+
+/* ── Dark-mode overrides ─────────────────────────────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --c-brand:           #60A5FA;
+    --c-brand-hover:     #3B82F6;
+    --c-brand-active:    #2563EB;
+    --c-brand-light:     #1E3A5F;
+    --c-brand-disabled:  #4B5563;
+    --c-brand-ring:      #93C5FD;
+
+    --c-community:       #86EFAC;
+    --c-community-hover: #4ADE80;
+    --c-community-light: #052E16;
+    --c-community-dark:  #BBF7D0;
+
+    --c-accent:          #FBBF24;
+    --c-accent-hover:    #F59E0B;
+    --c-accent-light:    #2D1400;
+    --c-accent-dark:     #FDE68A;
+
+    --c-app-bg:          #0F172A;
+    --c-surface:         #1E293B;
+    --c-surface-2:       #273449;
+    --c-elevated:        #273449;
+    --c-divider:         #334155;
+
+    --c-text-1:          #F1F5F9;
+    --c-text-2:          #94A3B8;
+    --c-text-3:          #64748B;
+
+    --c-success:         #4ADE80;
+    --c-warning:         #FCD34D;
+    --c-error:           #F87171;
+    --c-info:            #7DD3FC;
+
+    --background:        var(--c-app-bg);
+    --foreground:        var(--c-text-1);
+  }
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist);
-  --font-mono: var(--font-geist-mono);
+  --color-background:       var(--background);
+  --color-foreground:       var(--foreground);
+  --font-sans:              var(--font-geist);
+  --font-mono:              var(--font-geist-mono);
+
+  /* Brand */
+  --color-brand:            var(--c-brand);
+  --color-brand-hover:      var(--c-brand-hover);
+  --color-brand-active:     var(--c-brand-active);
+  --color-brand-light:      var(--c-brand-light);
+  --color-brand-disabled:   var(--c-brand-disabled);
+  --color-brand-ring:       var(--c-brand-ring);
+
+  /* Community */
+  --color-community:        var(--c-community);
+  --color-community-hover:  var(--c-community-hover);
+  --color-community-light:  var(--c-community-light);
+  --color-community-dark:   var(--c-community-dark);
+
+  /* Accent */
+  --color-accent:           var(--c-accent);
+  --color-accent-hover:     var(--c-accent-hover);
+  --color-accent-light:     var(--c-accent-light);
+  --color-accent-dark:      var(--c-accent-dark);
+
+  /* Surfaces */
+  --color-app-bg:           var(--c-app-bg);
+  --color-surface:          var(--c-surface);
+  --color-surface-2:        var(--c-surface-2);
+  --color-elevated:         var(--c-elevated);
+  --color-divider:          var(--c-divider);
+
+  /* Text */
+  --color-text-1:           var(--c-text-1);
+  --color-text-2:           var(--c-text-2);
+  --color-text-3:           var(--c-text-3);
+
+  /* Status */
+  --color-success:          var(--c-success);
+  --color-warning:          var(--c-warning);
+  --color-status-error:     var(--c-error);
+  --color-info:             var(--c-info);
 }
 
-
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--c-app-bg);
+  color: var(--c-text-1);
   font-family: Arial, Helvetica, sans-serif;
 }

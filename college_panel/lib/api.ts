@@ -11,10 +11,12 @@ export interface Community {
   id: string;
   name: string;
   type: CommunityType;
-  member_users: string[];
-  requested_users: string[];
   parent_colleges: string[];
   posts: string[];
+  member_count: number;
+  post_count: number;
+  is_member: boolean | null;
+  is_requested: boolean | null;
   created_at: string;
   updated_at: string;
 }

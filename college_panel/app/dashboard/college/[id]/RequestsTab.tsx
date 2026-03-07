@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 import {
   Community,
-  PendingRequestsResponse,
   UserProfile,
   getPendingRequests,
   approveJoinRequest,
@@ -11,51 +10,27 @@ import {
   getUserProfile,
 } from "@/lib/api";
 import {
-  Bell,
-  UserCheck,
-  UserX,
-  Loader2,
-  AlertCircle,
-  Lock,
   ChevronDown,
   ChevronRight,
-  Mail,
+  Lock,
+  Loader2,
+  AlertCircle,
+  UserCheck,
+  UserX,
+  Users,
 } from "lucide-react";
 
 interface Props {
   communities: Community[]; // already filtered to PRIVATE
-  onRefresh: () => Promise<void>;
 }
 
-function RequestorAvatar({ profile }: { profile: UserProfile | null | undefined }) {
-  if (profile?.picture) {
-    return (
-      <img
-        src={profile.picture}
-        alt={profile.name ?? "User"}
-        className="w-8 h-8 rounded-full object-cover shrink-0"
-      />
-    );
-  }
-  const initials = profile?.name
-    ? profile.name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()
-    : profile?.email?.slice(0, 2).toUpperCase() ?? "?";
-  return (
-    <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 text-xs font-bold shrink-0 select-none">
-      {initials}
-    </div>
-  );
-}
-
-export default function RequestsTab({ communities, onRefresh }: Props) {
+export default function RequestsTab({ communities }: Props) {
   if (communities.length === 0) {
     return (
-      <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-slate-200">
-        <Lock size={32} className="mx-auto text-slate-300 mb-3" />
-        <p className="text-slate-500 text-sm">No private communities in this college.</p>
-        <p className="text-xs text-slate-400 mt-1">
-          Create a PRIVATE community to see join requests here.
-        </p>
+      <div className="flex flex-col items-center justify-center py-20 text-text-3">
+        <Lock size={36} className="mb-3 opacity-40" />
+        <p className="text-text-2 font-medium">No private communities</p>
+        <p className="text-sm mt-1">Join requests only apply to private communities.</p>
       </div>
     );
   }
@@ -63,170 +38,165 @@ export default function RequestsTab({ communities, onRefresh }: Props) {
   return (
     <div className="space-y-3">
       {communities.map((c) => (
-        <CommunityRequests key={c.id} community={c} onRefresh={onRefresh} />
+        <CommunityRequests key={c.id} community={c} />
       ))}
     </div>
   );
 }
 
-function CommunityRequests({
-  community,
-  onRefresh,
-}: {
-  community: Community;
-  onRefresh: () => Promise<void>;
-}) {
-  const [open, setOpen] = useState(community.requested_users.length > 0);
-  const [requests, setRequests] = useState<PendingRequestsResponse | null>(null);
-  const [profiles, setProfiles] = useState<Record<string, UserProfile | null>>({});
+function CommunityRequests({ community }: { community: Community }) {
+  const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [requests, setRequests] = useState<string[]>([]);
+  const [total, setTotal] = useState(0);
+  const [profiles, setProfiles] = useState<Record<string, UserProfile | null>>({});
+  const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
+  const [fetched, setFetched] = useState(false);
 
   const fetchRequests = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
       const data = await getPendingRequests(community.id);
-      setRequests(data);
-      // Fetch profiles for any UUIDs we don't have yet
-      const missing = data.requested_users.filter((id) => !(id in profiles));
-      if (missing.length > 0) {
-        const results = await Promise.all(
-          missing.map((id) =>
-            getUserProfile(id)
-              .then((p) => ({ id, profile: p }))
-              .catch(() => ({ id, profile: null }))
-          )
-        );
-        setProfiles((prev) => {
-          const next = { ...prev };
-          for (const { id, profile } of results) next[id] = profile;
-          return next;
-        });
-      }
+      const userIds = data.requested_users ?? [];
+      setRequests(userIds);
+      setTotal(data.total ?? 0);
+
+      // Fetch all profiles fresh — no stale closure issues
+      const results = await Promise.allSettled(
+        userIds.map((id) => getUserProfile(id))
+      );
+      const map: Record<string, UserProfile | null> = {};
+      userIds.forEach((id, i) => {
+        const result = results[i];
+        map[id] = result.status === "fulfilled" ? result.value : null;
+      });
+      setProfiles(map);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load requests");
     } finally {
       setLoading(false);
+      setFetched(true);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [community.id]);
 
-  useEffect(() => {
-    if (open) fetchRequests();
-  }, [open, fetchRequests]);
+  function handleToggle() {
+    const willOpen = !open;
+    setOpen(willOpen);
+    if (willOpen && !fetched) {
+      fetchRequests();
+    }
+  }
 
   async function handleApprove(userId: string) {
-    setActionLoading(userId);
+    setActionLoading((prev) => ({ ...prev, [userId]: true }));
     try {
       await approveJoinRequest(community.id, userId);
-      await fetchRequests();
-      await onRefresh();
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Action failed");
+      setRequests((prev) => prev.filter((id) => id !== userId));
+      setTotal((prev) => Math.max(0, prev - 1));
+    } catch {
+      // no-op — keep user in list
     } finally {
-      setActionLoading(null);
+      setActionLoading((prev) => ({ ...prev, [userId]: false }));
     }
   }
 
   async function handleReject(userId: string) {
-    setActionLoading(userId + "_reject");
+    setActionLoading((prev) => ({ ...prev, [userId]: true }));
     try {
       await rejectJoinRequest(community.id, userId);
-      await fetchRequests();
-      await onRefresh();
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Action failed");
+      setRequests((prev) => prev.filter((id) => id !== userId));
+      setTotal((prev) => Math.max(0, prev - 1));
+    } catch {
+      // no-op
     } finally {
-      setActionLoading(null);
+      setActionLoading((prev) => ({ ...prev, [userId]: false }));
     }
   }
 
-  const pendingCount = community.requested_users.length;
-
   return (
-    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+    <div className="border border-divider rounded-xl overflow-hidden">
+      {/* Accordion header */}
       <button
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between px-4 py-3.5 text-sm hover:bg-slate-50 transition"
+        onClick={handleToggle}
+        className="w-full flex items-center justify-between px-4 py-3 bg-surface hover:bg-surface-2 transition text-left"
       >
-        <div className="flex items-center gap-2 font-medium text-slate-800">
-          <Lock size={14} className="text-amber-500" />
-          {community.name}
-          {pendingCount > 0 && (
-            <span className="inline-flex items-center justify-center bg-amber-100 text-amber-700 text-xs font-semibold rounded-full px-1.5 min-w-[1.25rem] h-5">
-              {pendingCount}
+        <div className="flex items-center gap-2 min-w-0">
+          <Lock size={14} className="text-text-3 shrink-0" />
+          <span className="font-medium text-text-1 text-sm truncate">{community.name}</span>
+          {fetched && total > 0 && (
+            <span className="shrink-0 text-xs bg-brand text-white px-1.5 py-0.5 rounded-full font-medium">
+              {total}
             </span>
           )}
         </div>
-        {open ? <ChevronDown size={15} className="text-slate-400" /> : <ChevronRight size={15} className="text-slate-400" />}
+        <div className="shrink-0 text-text-3">
+          {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        </div>
       </button>
 
+      {/* Accordion body */}
       {open && (
-        <div className="border-t border-slate-100 px-4 py-3">
-          {error && (
-            <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 mb-3 text-xs">
-              <AlertCircle size={13} />
-              {error}
-            </div>
-          )}
-
+        <div className="border-t border-divider bg-surface">
           {loading ? (
-            <div className="flex items-center justify-center py-6">
-              <Loader2 size={20} className="animate-spin text-blue-500" />
+            <div className="flex items-center justify-center py-8">
+              <Loader2 size={22} className="animate-spin text-brand" />
             </div>
-          ) : requests && requests.requested_users.length > 0 ? (
-            <ul className="space-y-2">
-              {requests.requested_users.map((userId) => {
-                const profile = profiles[userId];
+          ) : error ? (
+            <div className="flex items-center gap-2 text-red-600 text-sm p-4">
+              <AlertCircle size={14} />
+              {error}
+              <button onClick={fetchRequests} className="underline hover:no-underline ml-2">
+                Retry
+              </button>
+            </div>
+          ) : requests.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-text-3">
+              <Users size={24} className="mb-2 opacity-40" />
+              <p className="text-sm">No pending requests</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-divider">
+              {requests.map((userId) => {
+                const p = profiles[userId];
+                const busy = actionLoading[userId] ?? false;
                 return (
-                  <li
-                    key={userId}
-                    className="flex items-center justify-between gap-2 bg-slate-50 rounded-lg px-3 py-2.5"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <RequestorAvatar profile={profile} />
+                  <li key={userId} className="flex items-center justify-between gap-3 px-4 py-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      {p?.picture ? (
+                        <img
+                          src={p.picture}
+                          alt={p.name ?? "User"}
+                          className="w-9 h-9 rounded-full object-cover shrink-0 bg-surface-2"
+                        />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-brand-light flex items-center justify-center text-brand font-bold text-sm shrink-0">
+                          {(p?.name ?? "?")[0].toUpperCase()}
+                        </div>
+                      )}
                       <div className="min-w-0">
-                        <p className="text-xs font-medium text-slate-800 truncate">
-                          {profile?.name ?? (
-                            <span className="text-slate-400 italic">Loading…</span>
-                          )}
-                        </p>
-                        {profile?.email ? (
-                          <p className="text-xs text-slate-500 flex items-center gap-0.5 truncate">
-                            <Mail size={9} />
-                            {profile.email}
-                          </p>
-                        ) : (
-                          <p className="text-xs text-slate-400 font-mono truncate">{userId}</p>
-                        )}
+                        <p className="text-sm font-medium text-text-1 truncate">{p?.name ?? "Unknown user"}</p>
+                        <p className="text-xs text-text-3 truncate">{p?.email ?? userId}</p>
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex gap-2 shrink-0">
                       <button
                         onClick={() => handleApprove(userId)}
-                        disabled={!!actionLoading}
-                        className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition disabled:opacity-50"
+                        disabled={busy}
+                        title="Approve"
+                        className="flex items-center gap-1 text-xs font-medium text-white bg-brand hover:bg-brand-hover disabled:bg-brand-disabled px-3 py-1.5 rounded-lg transition"
                       >
-                        {actionLoading === userId ? (
-                          <Loader2 size={11} className="animate-spin" />
-                        ) : (
-                          <UserCheck size={11} />
-                        )}
+                        {busy ? <Loader2 size={12} className="animate-spin" /> : <UserCheck size={13} />}
                         Approve
                       </button>
                       <button
                         onClick={() => handleReject(userId)}
-                        disabled={!!actionLoading}
-                        className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-lg transition disabled:opacity-50"
+                        disabled={busy}
+                        title="Reject"
+                        className="flex items-center gap-1 text-xs font-medium text-red-600 border border-red-300 hover:bg-red-50 disabled:opacity-50 px-3 py-1.5 rounded-lg transition"
                       >
-                        {actionLoading === userId + "_reject" ? (
-                          <Loader2 size={11} className="animate-spin" />
-                        ) : (
-                          <UserX size={11} />
-                        )}
+                        {busy ? <Loader2 size={12} className="animate-spin" /> : <UserX size={13} />}
                         Reject
                       </button>
                     </div>
@@ -234,11 +204,6 @@ function CommunityRequests({
                 );
               })}
             </ul>
-          ) : (
-            <div className="flex items-center justify-center gap-2 py-6 text-slate-400 text-sm">
-              <Bell size={16} />
-              No pending requests
-            </div>
           )}
         </div>
       )}
