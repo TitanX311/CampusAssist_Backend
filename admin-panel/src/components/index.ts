@@ -15,7 +15,6 @@ export { TableActions, TableActionsCompact, TableHeaderActions } from './TableAc
 export type { } from './TableActions';
 
 export { AdminLayout } from './AdminLayout';
-export { ThemeToggle } from './ThemeToggle';
 
 // Utility for theme colors
 export const themeColors = {

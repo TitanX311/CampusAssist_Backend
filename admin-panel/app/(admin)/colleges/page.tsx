@@ -23,28 +23,16 @@ export default function CollegesPage() {
     setLoading(true);
     try {
       const collegesRes = await getAdminColleges(page, PAGE_SIZE);
-      
-      // Fetch community counts for each college
       const itemsWithCounts = await Promise.all(
         collegesRes.items.map(async (college) => {
           try {
-            const communitiesRes = await getCollegeCommunities(college.id, 1, 100);
-            console.log(`Communities for college ${college.id}:`, communitiesRes);
-            return {
-              ...college,
-              communityCount: communitiesRes.total || communitiesRes.items?.length || 0,
-            };
-          } catch (err) {
-            console.error(`Failed to load communities for college ${college.id}:`, err);
-            // If fetching communities fails, default to 0
-            return {
-              ...college,
-              communityCount: 0,
-            };
+            const res = await getCollegeCommunities(college.id, 1, 100);
+            return { ...college, communityCount: res.total || res.items?.length || 0 };
+          } catch {
+            return { ...college, communityCount: 0 };
           }
         })
       );
-      
       setData({ items: itemsWithCounts, total: collegesRes.total, page: collegesRes.page });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load");
@@ -53,9 +41,7 @@ export default function CollegesPage() {
     }
   };
 
-  useEffect(() => {
-    load();
-  }, [page]);
+  useEffect(() => { load(); }, [page]);
 
   async function handleDelete(college: CollegeResponse) {
     if (!confirm(`Delete college "${college.name}"? This cannot be undone.`)) return;
@@ -67,25 +53,30 @@ export default function CollegesPage() {
     }
   }
 
-  if (loading && !data) return <p style={{ color: "var(--muted)" }}>Loading colleges…</p>;
-  if (error) return <p style={{ color: "var(--danger)" }}>{error}</p>;
+  if (loading && !data) return <div className="state-loading">Loading colleges…</div>;
+  if (error) return <div className="state-error">{error}</div>;
   if (!data) return null;
 
   const totalPages = Math.ceil(data.total / PAGE_SIZE) || 1;
 
   return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.75rem" }}>
-        <h1 style={{ fontSize: "1.5rem", fontWeight: 700, margin: 0 }}>Colleges</h1>
-        <Link href="/colleges/new" className="btn btn-primary">Create college</Link>
+    <>
+      <div className="page-header">
+        <h1 className="page-title">Colleges</h1>
+        <Link href="/colleges/new" className="btn btn-primary">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+            <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+          New College
+        </Link>
       </div>
+
       <div className="card table-wrap">
         <table>
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Contact email</th>
-              <th>Address</th>
+              <th>College</th>
+              <th>Contact</th>
               <th>Admins</th>
               <th>Communities</th>
               <th>Created</th>
@@ -94,51 +85,56 @@ export default function CollegesPage() {
           </thead>
           <tbody>
             {data.items.map((c) => (
-              <tr
-                key={c.id}
-                style={{ cursor: "pointer" }}
-                onClick={() => router.push(`/colleges/${c.id}`)}
-              >
+              <tr key={c.id} style={{ cursor: "pointer" }} onClick={() => router.push(`/colleges/${c.id}`)}>
                 <td>
-                  <Link href={`/colleges/${c.id}`} onClick={(e) => e.stopPropagation()} style={{ fontWeight: 500 }}>
-                    {c.name}
-                  </Link>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 13.5 }}>
+                      <Link href={`/colleges/${c.id}`} onClick={(e) => e.stopPropagation()} style={{ color: "var(--text-primary)", textDecoration: "none" }}>
+                        {c.name}
+                      </Link>
+                    </div>
+                    {c.physical_address && (
+                      <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 2, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {c.physical_address}
+                      </div>
+                    )}
+                  </div>
                 </td>
-                <td>{c.contact_email}</td>
-                <td style={{ maxWidth: "12rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {c.physical_address || "—"}
+                <td style={{ fontSize: 12.5, color: "var(--text-secondary)" }}>{c.contact_email}</td>
+                <td>
+                  <span style={{ fontSize: 13.5, fontWeight: 600 }}>
+                    {Array.isArray(c.admin_users) ? c.admin_users.length : 0}
+                  </span>
                 </td>
-                <td>{Array.isArray(c.admin_users) && c.admin_users.length > 0 ? c.admin_users.length : 0}</td>
-                <td>{c.communityCount}</td>
-                <td style={{ fontSize: "0.875rem", color: "var(--muted)" }}>
-                  {new Date(c.created_at).toLocaleDateString()}
+                <td>
+                  <span style={{ fontSize: 13.5, fontWeight: 600 }}>{c.communityCount}</span>
+                </td>
+                <td style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                  {new Date(c.created_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
                 </td>
                 <td onClick={(e) => e.stopPropagation()}>
-                  <Link href={`/colleges/${c.id}`} className="btn btn-ghost" style={{ marginRight: "0.5rem" }}>
-                    View
-                  </Link>
-                  <button
-                    type="button"
-                    className="btn btn-danger"
-                    onClick={(e) => { e.stopPropagation(); handleDelete(c); }}
-                  >
-                    Delete
-                  </button>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <Link href={`/colleges/${c.id}`} className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: 12 }}>
+                      View
+                    </Link>
+                    <button type="button" className="btn btn-danger" style={{ padding: "5px 10px", fontSize: 12 }} onClick={(e) => { e.stopPropagation(); handleDelete(c); }}>
+                      Delete
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
       {totalPages > 1 && (
-        <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem", alignItems: "center" }}>
-          <button className="btn btn-ghost" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</button>
-          <span style={{ fontSize: "0.875rem", color: "var(--muted)" }}>
-            Page {page} of {totalPages} ({data.total} total)
-          </span>
-          <button className="btn btn-ghost" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Next</button>
+        <div className="pagination">
+          <button className="btn btn-ghost" style={{ padding: "6px 12px" }} disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>← Prev</button>
+          <span className="pagination-info">Page {page} of {totalPages} · {data.total} total</span>
+          <button className="btn btn-ghost" style={{ padding: "6px 12px" }} disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Next →</button>
         </div>
       )}
-    </div>
+    </>
   );
 }

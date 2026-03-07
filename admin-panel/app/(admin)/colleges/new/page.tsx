@@ -31,59 +31,94 @@ export default function NewCollegePage() {
     }
   }
 
-  const inputStyle = {
-    width: "100%",
-    padding: "0.5rem 0.75rem",
-    borderRadius: "0.5rem",
-    border: "1px solid var(--border)",
-    background: "var(--bg)",
-    color: "var(--text)",
-    marginBottom: "1rem",
-  };
-
   return (
-    <div>
-      <div style={{ marginBottom: "1rem" }}>
-        <Link href="/colleges" style={{ color: "var(--muted)", fontSize: "0.875rem" }}>← Colleges</Link>
+    <>
+      <Link href="/colleges" className="back-link">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+          <path d="M19 12H5M12 19l-7-7 7-7" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+        Colleges
+      </Link>
+
+      <div className="page-header">
+        <h1 className="page-title">New College</h1>
       </div>
-      <h1 style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: "1rem" }}>Create college</h1>
-      <form onSubmit={handleSubmit} className="card" style={{ maxWidth: "28rem" }}>
-        <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.875rem" }}>Name *</label>
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-          placeholder="e.g. MIT"
-          style={inputStyle}
-        />
-        <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.875rem" }}>Contact email *</label>
-        <input
-          type="email"
-          value={contactEmail}
-          onChange={(e) => setContactEmail(e.target.value)}
-          required
-          placeholder="admin@college.edu"
-          style={inputStyle}
-        />
-        <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.875rem" }}>Physical address</label>
-        <textarea
-          value={physicalAddress}
-          onChange={(e) => setPhysicalAddress(e.target.value)}
-          placeholder="Street, city, state"
-          rows={2}
-          style={{ ...inputStyle, resize: "vertical" }}
-        />
-        {error && (
-          <p style={{ color: "var(--danger)", fontSize: "0.875rem", marginBottom: "1rem" }}>{error}</p>
-        )}
-        <div style={{ display: "flex", gap: "0.75rem" }}>
-          <button type="submit" disabled={submitting} className="btn btn-primary">
-            {submitting ? "Creating…" : "Create college"}
-          </button>
-          <Link href="/colleges" className="btn btn-ghost">Cancel</Link>
+
+      <div style={{ maxWidth: 480 }}>
+        <div className="card">
+          <form onSubmit={handleSubmit}>
+            <div style={{ marginBottom: 18 }}>
+              <label>
+                Name <span style={{ color: "var(--text-muted)" }}>*</span>
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                placeholder="e.g. MIT"
+                style={{ marginBottom: 0 }}
+              />
+            </div>
+
+            <div style={{ marginBottom: 18 }}>
+              <label>
+                Contact email <span style={{ color: "var(--text-muted)" }}>*</span>
+              </label>
+              <input
+                type="email"
+                value={contactEmail}
+                onChange={(e) => setContactEmail(e.target.value)}
+                required
+                placeholder="admin@college.edu"
+                style={{ marginBottom: 0 }}
+              />
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <label>Physical address</label>
+              <textarea
+                value={physicalAddress}
+                onChange={(e) => setPhysicalAddress(e.target.value)}
+                placeholder="Street, city, state"
+                rows={3}
+                style={{ marginBottom: 0, resize: "vertical" }}
+              />
+            </div>
+
+            {error && (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 8,
+                padding: "10px 14px",
+                background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)",
+                borderRadius: "var(--radius-sm)",
+                fontSize: 13, color: "#fca5a5", marginBottom: 16,
+              }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.75"/>
+                  <path d="M12 8v4M12 16h.01" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"/>
+                </svg>
+                {error}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 8 }}>
+              <button type="submit" disabled={submitting} className="btn btn-primary">
+                {submitting ? (
+                  <>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ animation: "spin 0.8s linear infinite" }}>
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2.5" strokeDasharray="60" strokeDashoffset="20"/>
+                    </svg>
+                    Creating…
+                  </>
+                ) : "Create college"}
+              </button>
+              <Link href="/colleges" className="btn btn-ghost">Cancel</Link>
+            </div>
+          </form>
         </div>
-      </form>
-    </div>
+      </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </>
   );
 }

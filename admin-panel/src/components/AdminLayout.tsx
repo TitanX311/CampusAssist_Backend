@@ -1,6 +1,7 @@
+'use client';
+
 import React from 'react';
 import Link from 'next/link';
-import { ThemeToggle } from './ThemeToggle';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -48,8 +49,6 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
               ))}
             </nav>
 
-            {/* Theme Toggle */}
-            <ThemeToggle />
           </div>
         </div>
       </header>
