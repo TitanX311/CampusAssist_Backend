@@ -1,11 +1,32 @@
 env/
 __pycache__/
 bin/
-.env
 venv/
-# Production env files (contain real credentials)
-services/**/.env.prod
 
-# Generated k8s secrets — never commit
+# ── Local env files (contain real credentials — never commit) ─────────────────
+.env
+.env.local
+.env.prod
+services/**/.env
+services/**/.env.prod
+services/**/.env.local
+
+# ── Generated k8s secrets — never commit ──────────────────────────────────────
 k8s/overlays/**/secret.yaml
 k8s/**/secret.yaml
+
+# ── Python ────────────────────────────────────────────────────────────────────
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+*.egg-info/
+
+# ── Node / Next.js ─────────────────────────────────────────────────────────────
+college_panel/.next/
+college_panel/node_modules/
+college_panel/.env.local
+college_panel/.env*.local
+
+# ── Misc ──────────────────────────────────────────────────────────────────────
+*.log
+.DS_Store
