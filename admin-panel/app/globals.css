@@ -1,51 +1,91 @@
-/* Admin panel base styles */
+/* Campus Assist Admin Panel - Professional Theme */
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
 
 :root {
-  --bg: #0f1419;
-  --surface: #1a2332;
-  --border: #2d3a4d;
-  --text: #e7e9ea;
-  --muted: #8b98a5;
-  --accent: #1d9bf0;
-  --danger: #f4212e;
-  --success: #00ba7c;
+  /* Primary - Professional Indigo */
+  --primary: #4f46e5;
+  --primary-light: #818cf8;
+  --primary-hover: #4338ca;
+  --primary-active: #3730a3;
+  
+  /* Secondary - Professional Emerald */
+  --secondary: #14b8a6;
+  --secondary-hover: #0d9488;
+  
+  /* Accent - Professional Amber */
+  --accent: #f59e0b;
+  --accent-hover: #d97706;
+  
+  /* Status Colors */
+  --success: #10b981;
+  --warning: #f59e0b;
+  --error: #ef4444;
+  --info: #0ea5e9;
+  
+  /* Interactive */
+  --button-disabled: #cbd5e1;
+  --focus-ring: #4f46e5;
+  --link: #4f46e5;
+  --link-hover: #4338ca;
+  
+  /* Input */
+  --input-border: #e2e8f0;
+  --input-focus-border: #4f46e5;
+  --input-error-border: #ef4444;
 }
 
-* {
-  box-sizing: border-box;
+@layer base {
+  * {
+    @apply box-border;
+  }
+
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    @apply bg-white dark:bg-neutral-950 text-neutral-950 dark:text-neutral-50 font-sans;
+    margin: 0;
+    min-height: 100vh;
+  }
+
+  a {
+    @apply text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 transition-colors duration-200;
+  }
+
+  button {
+    @apply cursor-pointer transition-all duration-200;
+  }
+
+  button:disabled {
+    @apply opacity-60 cursor-not-allowed;
+  }
+
+  input,
+  textarea,
+  select {
+    font-family: inherit;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-bold tracking-tight;
+  }
+
+  h1 { @apply text-4xl; }
+  h2 { @apply text-3xl; }
+  h3 { @apply text-2xl; }
+  h4 { @apply text-xl; }
+  h5 { @apply text-lg; }
 }
 
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: ui-sans-serif, system-ui, sans-serif;
-  margin: 0;
-  min-height: 100vh;
+/* Typography */
+.prose {
+  @apply text-neutral-900 dark:text-neutral-100;
 }
 
-a {
-  color: var(--accent);
-  text-decoration: none;
-}
-
-a:hover {
-  text-decoration: underline;
-}
-
-button {
-  cursor: pointer;
-  font: inherit;
-}
-
-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-input, textarea {
-  font: inherit;
-}
-
+/* Tables */
 .table-wrap {
   overflow-x: auto;
 }
@@ -55,89 +95,36 @@ table {
   border-collapse: collapse;
 }
 
+thead {
+  @apply bg-neutral-50 dark:bg-neutral-800;
+}
+
 th, td {
-  padding: 0.75rem 1rem;
-  text-align: left;
-  border-bottom: 1px solid var(--border);
+  @apply px-4 py-3 text-left border-b border-neutral-200 dark:border-neutral-700;
 }
 
 th {
-  font-weight: 600;
-  color: var(--muted);
-  font-size: 0.8125rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  @apply font-semibold text-neutral-700 dark:text-neutral-300 text-sm uppercase tracking-wide;
 }
 
 tr:hover td {
-  background: rgba(255,255,255,0.03);
+  @apply bg-neutral-50 dark:bg-neutral-800/50;
 }
 
-.badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.25rem 0.5rem;
-  border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: 500;
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
 }
 
-.badge-user { background: #1e3a5f; color: #7dd3fc; }
-.badge-college { background: #1e2f1e; color: #86efac; }
-.badge-super { background: #3f1e3f; color: #f0abfc; }
-.badge-active { background: #1e3a2f; color: #6ee7b7; }
-.badge-inactive { background: #3a2e2e; color: #fca5a5; }
-.badge-public { background: #1e3a5f; color: #93c5fd; }
-.badge-private { background: #3a2e3a; color: #e9d5ff; }
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
-  font-weight: 500;
-  border: none;
-  transition: background 0.15s, opacity 0.15s;
+::-webkit-scrollbar-track {
+  @apply bg-neutral-100 dark:bg-neutral-800;
 }
 
-.btn-primary {
-  background: var(--accent);
-  color: #fff;
+::-webkit-scrollbar-thumb {
+  @apply bg-neutral-300 dark:bg-neutral-600 rounded-full;
 }
 
-.btn-primary:hover:not(:disabled) {
-  background: #1a8cd8;
-}
-
-.btn-danger {
-  background: var(--danger);
-  color: #fff;
-}
-
-.btn-danger:hover:not(:disabled) {
-  background: #c41a24;
-}
-
-.btn-ghost {
-  background: transparent;
-  color: var(--text);
-}
-
-.btn-ghost:hover:not(:disabled) {
-  background: rgba(255,255,255,0.08);
-}
-
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 0.75rem;
-  padding: 1.25rem;
-}
-
-.sidebar a.active {
-  background: rgba(29, 155, 240, 0.15);
-  color: var(--accent);
-  border-left-color: var(--accent);
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-neutral-400 dark:bg-neutral-500;
 }
