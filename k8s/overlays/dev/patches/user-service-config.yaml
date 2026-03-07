@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: user-service-config
+data:
+  DEBUG: "true"
+  STATS_CACHE_TTL_SECONDS: "60"

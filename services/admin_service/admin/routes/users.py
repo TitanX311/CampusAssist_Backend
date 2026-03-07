@@ -1,11 +1,11 @@
-"""
-Admin panel — user management.
+"""Admin panel — user management.
 Proxies to auth_service admin routes.
 
-GET    /admin/users                 — list all users (paginated)
-GET    /admin/users/{id}            — get a user by ID
-PATCH  /admin/users/{id}/type       — change user type (USER/COLLEGE/SUPER_ADMIN)
-PATCH  /admin/users/{id}/active     — activate / deactivate account
+GET    /admin/users                        — list all users (paginated, filterable)
+GET    /admin/users/{id}                   — get a user by ID
+PATCH  /admin/users/{id}/type             — change user type
+PATCH  /admin/users/{id}/active           — activate / deactivate account
+PATCH  /admin/users/{id}/profile          — update name / picture
 """
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
@@ -26,22 +26,41 @@ class UpdateActiveBody(BaseModel):
     is_active: bool
 
 
+class UpdateProfileBody(BaseModel):
+    name: str | None = None
+    picture: str | None = None
+
+
 @router.get(
     "",
     summary="[Admin] List all users",
-    description="Paginated list of every registered user. Requires SUPER_ADMIN role.",
+    description=(
+        "Paginated user list.\n\n"
+        "Filters: `search` (email or name), `user_type`, `is_active`. "
+        "Requires SUPER_ADMIN role."
+    ),
 )
 async def list_users(
     request: Request,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
+    search: str | None = Query(default=None, description="Filter by email or name"),
+    user_type: str | None = Query(default=None, description="USER | COLLEGE | SUPER_ADMIN"),
+    is_active: bool | None = Query(default=None, description="Filter by active status"),
     _: TokenPayload = Depends(require_super_admin),
     settings: Settings = Depends(get_settings),
 ) -> JSONResponse:
+    params: dict = {"page": page, "page_size": page_size}
+    if search is not None:
+        params["search"] = search
+    if user_type is not None:
+        params["user_type"] = user_type
+    if is_active is not None:
+        params["is_active"] = str(is_active).lower()
     resp = await api_get(
         f"{settings.AUTH_SERVICE_URL}/api/auth/admin/users",
         request,
-        {"page": page, "page_size": page_size},
+        params,
     )
     raise_for_upstream(resp)
     return JSONResponse(content=resp.json(), status_code=resp.status_code)
@@ -106,6 +125,27 @@ async def update_user_active(
         f"{settings.AUTH_SERVICE_URL}/api/auth/admin/users/{user_id}/active",
         request,
         body.model_dump(),
+    )
+    raise_for_upstream(resp)
+    return JSONResponse(content=resp.json(), status_code=resp.status_code)
+
+
+@router.patch(
+    "/{user_id}/profile",
+    summary="[Admin] Update user name / picture",
+    description="Overwrite display name and/or profile picture URL. Requires SUPER_ADMIN role.",
+)
+async def update_user_profile(
+    user_id: str,
+    body: UpdateProfileBody,
+    request: Request,
+    _: TokenPayload = Depends(require_super_admin),
+    settings: Settings = Depends(get_settings),
+) -> JSONResponse:
+    resp = await api_patch(
+        f"{settings.AUTH_SERVICE_URL}/api/auth/admin/users/{user_id}/profile",
+        request,
+        body.model_dump(exclude_none=True),
     )
     raise_for_upstream(resp)
     return JSONResponse(content=resp.json(), status_code=resp.status_code)

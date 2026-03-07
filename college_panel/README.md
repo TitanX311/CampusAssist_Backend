@@ -1,36 +1,100 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Campus Assist — College Panel
+
+Next.js admin/management frontend for the Campus Assist platform. Provides the UI for college administrators and super-admins to manage colleges, communities, users, and content.
+
+---
+
+## Features
+
+- **Authentication** — Google OAuth login via `auth_service`; JWT stored in `localStorage`, auto-refreshed on expiry
+- **Dashboard** — Overview of the college the signed-in admin manages
+- **College Management** — Edit college details (name, contact email, physical address)
+- **Community Browser** — View all communities in a college; join/leave or cancel a pending membership request
+- **Members & Admins** — See college members and admins with profile pictures and contact info
+- **Requests Tab** — Approve or reject pending join requests for private communities (shows user name + email)
+- **Super-Admin panel** — Manage users (type, active status, profile) and all colleges across the platform
+
+---
+
+## Tech Stack
+
+| Layer | Choice |
+|---|---|
+| Framework | [Next.js 15](https://nextjs.org) (App Router) |
+| Styling | [Tailwind CSS](https://tailwindcss.com) |
+| Language | TypeScript |
+| HTTP client | `fetch` (via `lib/api.ts`) |
+| Auth state | React Context (`lib/auth-context.tsx`) |
+
+---
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js ≥ 18
+- The backend services running and reachable (see root [README.md](../README.md))
+
+### Install & run
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Environment variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Create a `.env.local` file (not committed):
 
-## Learn More
+```env
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
+```
 
-To learn more about Next.js, take a look at the following resources:
+If `NEXT_PUBLIC_API_BASE_URL` is not set, `lib/api.ts` defaults to `http://localhost:8080`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Project Structure
 
-## Deploy on Vercel
+```
+app/
+  layout.tsx          — root layout, AuthProvider wrapper
+  page.tsx            — landing / redirect to dashboard
+  login/
+    page.tsx          — Google OAuth login page
+  dashboard/
+    layout.tsx        — sidebar + auth guard
+    page.tsx          — dashboard home
+    college/
+      [id]/           — per-college pages (communities, members, admins, requests)
+lib/
+  api.ts              — typed fetch wrappers for every backend endpoint
+  auth-context.tsx    — JWT storage, decode, refresh, logout
+public/               — static assets
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## API Layer (`lib/api.ts`)
+
+All backend calls go through `lib/api.ts`. Key function groups:
+
+| Group | Functions |
+|---|---|
+| Auth | `login()`, `refreshToken()`, `logout()` |
+| Profile | `getMe()`, `updateMe()`, `getUserProfile()` |
+| College | `listColleges()`, `getCollege()`, `createCollege()`, `updateCollege()`, `deleteCollege()` |
+| Community | `listCommunities()`, `getCommunity()`, `joinCommunity()`, `cancelJoinRequest()`, `leaveCommunity()` |
+| Admin — Users | `adminListUsers()`, `adminUpdateUserType()`, `adminUpdateUserActive()`, `adminUpdateUserProfile()` |
+| Admin — Stats | `adminGetStats()` |
+
+---
+
+## Building for Production
+
+```bash
+npm run build
+npm start
+```

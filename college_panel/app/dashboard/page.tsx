@@ -1,21 +1,29 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getMyColleges, College } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import { Building2, Users, BookOpen, ArrowRight, Loader2, AlertCircle, GraduationCap } from "lucide-react";
 
 export default function DashboardPage() {
+  const { isSuperAdmin } = useAuth();
+  const router = useRouter();
   const [colleges, setColleges] = useState<College[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (isSuperAdmin) {
+      router.replace("/dashboard/admin");
+      return;
+    }
     getMyColleges()
       .then((r) => setColleges(r.items))
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, []);
+  }, [isSuperAdmin, router]);
 
   if (loading) {
     return (

@@ -21,6 +21,7 @@ _bearer = HTTPBearer(auto_error=False)
 @dataclass(frozen=True)
 class TokenPayload:
     user_id: str
+    user_type: str
 
 
 def _decode(token: str) -> TokenPayload:
@@ -39,7 +40,8 @@ def _decode(token: str) -> TokenPayload:
             detail="Token missing subject",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    return TokenPayload(user_id=user_id)
+    user_type: str = payload.get("user_type", "REGULAR")
+    return TokenPayload(user_id=user_id, user_type=user_type)
 
 
 async def get_current_user(

@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import BigInteger, DateTime, ForeignKey, Text
-from sqlalchemy.dialects.postgresql import ARRAY, UUID
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from comment.models.base import Base
@@ -28,13 +28,8 @@ class Comment(Base):
     # Content
     content: Mapped[str] = mapped_column(Text, nullable=False)
 
-    # Counters
+    # Denormalised like counter — kept in sync by CommentLike insert/delete.
     likes: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
-
-    # Users who have liked this comment (used for toggle-like)
-    liked_by: Mapped[list[uuid.UUID]] = mapped_column(
-        ARRAY(UUID(as_uuid=True)), nullable=False, default=list, server_default="{}"
-    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
@@ -43,4 +38,34 @@ class Comment(Base):
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
+class CommentLike(Base):
+    """Join table — tracks which users have liked which comments.
+
+    Composite PK (comment_id, user_id) enforces at-most-one-like-per-user at
+    the database level, eliminating the need for a ``liked_by`` UUID array on
+    the parent ``Comment`` row.
+
+    ``ON DELETE CASCADE`` on the FK automatically removes all like rows when
+    the parent comment is deleted, so no manual cleanup is required.
+    """
+
+    __tablename__ = "comment_likes"
+
+    comment_id: Mapped[str] = mapped_column(
+        Text,
+        ForeignKey("comments.id", ondelete="CASCADE"),
+        primary_key=True,
+        index=True,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        index=True,
+    )
+    liked_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
     )

@@ -24,6 +24,9 @@ case "$ENV" in
     COLLEGE_ENV_FILE="$SCRIPT_DIR/../services/college_service/.env"
     ADMIN_ENV_FILE="$SCRIPT_DIR/../services/admin_service/.env"
     SEARCH_ENV_FILE="$SCRIPT_DIR/../services/search_service/.env"
+    USER_ENV_FILE="$SCRIPT_DIR/../services/user_service/.env"
+    FEED_ENV_FILE="$SCRIPT_DIR/../services/feed_service/.env"
+    NOTIFICATION_ENV_FILE="$SCRIPT_DIR/../services/notification_service/.env"
     OVERLAY_DIR="$SCRIPT_DIR/overlays/dev"
     PG_SERVICE="postgres-service"
     COMMUNITY_PG_SERVICE="community-postgres-service"
@@ -32,6 +35,9 @@ case "$ENV" in
     ATTACHMENT_PG_SERVICE="attachment-postgres-service"
     COLLEGE_PG_SERVICE="college-postgres-service"
     SEARCH_PG_SERVICE="search-postgres-service"
+    USER_PG_SERVICE="user-postgres-service"
+    FEED_PG_SERVICE="feed-postgres-service"
+    NOTIFICATION_PG_SERVICE="notification-postgres-service"
     ;;
   prod)
     AUTH_ENV_FILE="$SCRIPT_DIR/../services/auth_service/.env.prod"
@@ -42,6 +48,9 @@ case "$ENV" in
     COLLEGE_ENV_FILE="$SCRIPT_DIR/../services/college_service/.env.prod"
     ADMIN_ENV_FILE="$SCRIPT_DIR/../services/admin_service/.env.prod"
     SEARCH_ENV_FILE="$SCRIPT_DIR/../services/search_service/.env.prod"
+    USER_ENV_FILE="$SCRIPT_DIR/../services/user_service/.env.prod"
+    FEED_ENV_FILE="$SCRIPT_DIR/../services/feed_service/.env.prod"
+    NOTIFICATION_ENV_FILE="$SCRIPT_DIR/../services/notification_service/.env.prod"
     OVERLAY_DIR="$SCRIPT_DIR/overlays/prod"
     PG_SERVICE="postgres-service"
     COMMUNITY_PG_SERVICE="community-postgres-service"
@@ -50,6 +59,9 @@ case "$ENV" in
     ATTACHMENT_PG_SERVICE="attachment-postgres-service"
     COLLEGE_PG_SERVICE="college-postgres-service"
     SEARCH_PG_SERVICE="search-postgres-service"
+    USER_PG_SERVICE="user-postgres-service"
+    FEED_PG_SERVICE="feed-postgres-service"
+    NOTIFICATION_PG_SERVICE="notification-postgres-service"
     ;;
   *)
     echo "ERROR: Unknown environment '$ENV'. Use 'dev' or 'prod'."
@@ -610,4 +622,198 @@ stringData:
   SECRET_KEY: "${SEARCH_SECRET_KEY}"
 EOF
   echo "Generated: $OVERLAY_DIR/search_service/secret.yaml"
+fi
+
+# ===========================================================================
+# USER SERVICE + USER POSTGRES
+# ===========================================================================
+if [[ ! -f "$USER_ENV_FILE" ]]; then
+  echo "WARNING: User .env file not found: $USER_ENV_FILE"
+  echo "  Skipping user_service secret generation."
+  echo "  Create $USER_ENV_FILE with DATABASE_URL and SECRET_KEY."
+else
+  USER_DATABASE_URL="$(parse_env "$USER_ENV_FILE" DATABASE_URL)"
+  USER_SECRET_KEY="$(parse_env "$USER_ENV_FILE" SECRET_KEY)"
+
+  missing=0
+  for var in USER_DATABASE_URL USER_SECRET_KEY; do
+    if [[ -z "${!var}" ]]; then
+      echo "ERROR: $var is missing or empty in $USER_ENV_FILE"
+      missing=1
+    fi
+  done
+  [[ $missing -eq 1 ]] && exit 1
+
+  parse_db_url "$USER_DATABASE_URL"
+  for var in PG_USER PG_PASSWORD PG_DB; do
+    if [[ -z "${!var}" ]]; then
+      echo "ERROR: Could not parse $var from DATABASE_URL in $USER_ENV_FILE"
+      exit 1
+    fi
+  done
+  USER_PG_USER="$PG_USER"
+  USER_PG_PASSWORD="$PG_PASSWORD"
+  USER_PG_DB="$PG_DB"
+
+  USER_K8S_DATABASE_URL="$(k8s_db_url "$USER_DATABASE_URL" "$USER_PG_SERVICE")"
+
+  mkdir -p "$OVERLAY_DIR/user_postgres"
+  cat > "$OVERLAY_DIR/user_postgres/secret.yaml" <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: user-postgres-secret
+  labels:
+    app: user-postgres
+type: Opaque
+stringData:
+  POSTGRES_USER: "${USER_PG_USER}"
+  POSTGRES_PASSWORD: "${USER_PG_PASSWORD}"
+  POSTGRES_DB: "${USER_PG_DB}"
+EOF
+  echo "Generated: $OVERLAY_DIR/user_postgres/secret.yaml"
+
+  mkdir -p "$OVERLAY_DIR/user_service"
+  cat > "$OVERLAY_DIR/user_service/secret.yaml" <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: user-service-secret
+  labels:
+    app: user-service
+type: Opaque
+stringData:
+  DATABASE_URL: "${USER_K8S_DATABASE_URL}"
+  SECRET_KEY: "${USER_SECRET_KEY}"
+EOF
+  echo "Generated: $OVERLAY_DIR/user_service/secret.yaml"
+fi
+
+# ===========================================================================
+# FEED SERVICE + FEED POSTGRES
+# ===========================================================================
+if [[ ! -f "$FEED_ENV_FILE" ]]; then
+  echo "WARNING: Feed .env file not found: $FEED_ENV_FILE"
+  echo "  Skipping feed_service secret generation."
+  echo "  Create $FEED_ENV_FILE with DATABASE_URL and SECRET_KEY."
+else
+  FEED_DATABASE_URL="$(parse_env "$FEED_ENV_FILE" DATABASE_URL)"
+  FEED_SECRET_KEY="$(parse_env "$FEED_ENV_FILE" SECRET_KEY)"
+
+  missing=0
+  for var in FEED_DATABASE_URL FEED_SECRET_KEY; do
+    if [[ -z "${!var}" ]]; then
+      echo "ERROR: $var is missing or empty in $FEED_ENV_FILE"
+      missing=1
+    fi
+  done
+  [[ $missing -eq 1 ]] && exit 1
+
+  parse_db_url "$FEED_DATABASE_URL"
+  for var in PG_USER PG_PASSWORD PG_DB; do
+    if [[ -z "${!var}" ]]; then
+      echo "ERROR: Could not parse $var from DATABASE_URL in $FEED_ENV_FILE"
+      exit 1
+    fi
+  done
+  FEED_PG_USER="$PG_USER"
+  FEED_PG_PASSWORD="$PG_PASSWORD"
+  FEED_PG_DB="$PG_DB"
+
+  FEED_K8S_DATABASE_URL="$(k8s_db_url "$FEED_DATABASE_URL" "$FEED_PG_SERVICE")"
+
+  mkdir -p "$OVERLAY_DIR/feed_postgres"
+  cat > "$OVERLAY_DIR/feed_postgres/secret.yaml" <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: feed-postgres-secret
+  labels:
+    app: feed-postgres
+type: Opaque
+stringData:
+  POSTGRES_USER: "${FEED_PG_USER}"
+  POSTGRES_PASSWORD: "${FEED_PG_PASSWORD}"
+  POSTGRES_DB: "${FEED_PG_DB}"
+EOF
+  echo "Generated: $OVERLAY_DIR/feed_postgres/secret.yaml"
+
+  mkdir -p "$OVERLAY_DIR/feed_service"
+  cat > "$OVERLAY_DIR/feed_service/secret.yaml" <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: feed-service-secret
+  labels:
+    app: feed-service
+type: Opaque
+stringData:
+  DATABASE_URL: "${FEED_K8S_DATABASE_URL}"
+  SECRET_KEY: "${FEED_SECRET_KEY}"
+EOF
+  echo "Generated: $OVERLAY_DIR/feed_service/secret.yaml"
+fi
+# ===========================================================================
+# NOTIFICATION SERVICE + NOTIFICATION POSTGRES
+# ===========================================================================
+if [[ ! -f "$NOTIFICATION_ENV_FILE" ]]; then
+  echo "WARNING: Notification .env file not found: $NOTIFICATION_ENV_FILE"
+  echo "  Skipping notification_service secret generation."
+  echo "  Create $NOTIFICATION_ENV_FILE with DATABASE_URL and SECRET_KEY."
+else
+  NOTIFICATION_DATABASE_URL="$(parse_env "$NOTIFICATION_ENV_FILE" DATABASE_URL)"
+  NOTIFICATION_SECRET_KEY="$(parse_env "$NOTIFICATION_ENV_FILE" SECRET_KEY)"
+
+  missing=0
+  for var in NOTIFICATION_DATABASE_URL NOTIFICATION_SECRET_KEY; do
+    if [[ -z "${!var}" ]]; then
+      echo "ERROR: $var is missing or empty in $NOTIFICATION_ENV_FILE"
+      missing=1
+    fi
+  done
+  [[ $missing -eq 1 ]] && exit 1
+
+  parse_db_url "$NOTIFICATION_DATABASE_URL"
+  for var in PG_USER PG_PASSWORD PG_DB; do
+    if [[ -z "${!var}" ]]; then
+      echo "ERROR: Could not parse $var from DATABASE_URL in $NOTIFICATION_ENV_FILE"
+      exit 1
+    fi
+  done
+  NOTIFICATION_PG_USER="$PG_USER"
+  NOTIFICATION_PG_PASSWORD="$PG_PASSWORD"
+  NOTIFICATION_PG_DB="$PG_DB"
+
+  NOTIFICATION_K8S_DATABASE_URL="$(k8s_db_url "$NOTIFICATION_DATABASE_URL" "$NOTIFICATION_PG_SERVICE")"
+
+  mkdir -p "$OVERLAY_DIR/notification_postgres"
+  cat > "$OVERLAY_DIR/notification_postgres/secret.yaml" <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: notification-postgres-secret
+  labels:
+    app: notification-postgres
+type: Opaque
+stringData:
+  POSTGRES_USER: "${NOTIFICATION_PG_USER}"
+  POSTGRES_PASSWORD: "${NOTIFICATION_PG_PASSWORD}"
+  POSTGRES_DB: "${NOTIFICATION_PG_DB}"
+EOF
+  echo "Generated: $OVERLAY_DIR/notification_postgres/secret.yaml"
+
+  mkdir -p "$OVERLAY_DIR/notification_service"
+  cat > "$OVERLAY_DIR/notification_service/secret.yaml" <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: notification-service-secret
+  labels:
+    app: notification-service
+type: Opaque
+stringData:
+  DATABASE_URL: "${NOTIFICATION_K8S_DATABASE_URL}"
+  SECRET_KEY: "${NOTIFICATION_SECRET_KEY}"
+EOF
+  echo "Generated: $OVERLAY_DIR/notification_service/secret.yaml"
 fi

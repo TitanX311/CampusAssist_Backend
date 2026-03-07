@@ -36,15 +36,28 @@ class UpdateCommunityRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 class CommunityResponse(BaseModel):
-    """Full community representation returned by the API."""
+    """Full community representation returned by the API.
+
+    Viewer-context fields (``is_member``, ``is_requested``) are ``None`` when
+    the endpoint does not receive an authenticated viewer (e.g. public listing).
+    They are populated from the ``CommunityMember`` / ``CommunityJoinRequest``
+    join tables — always a single indexed lookup per request, never N+1.
+    """
 
     id: str
     name: str
     type: str
-    member_users: list[uuid.UUID]
-    requested_users: list[uuid.UUID]
     parent_colleges: list[uuid.UUID]
     posts: list[uuid.UUID]
+
+    # Denormalized counters — updated atomically alongside join table writes.
+    member_count: int = 0
+    post_count: int = 0
+
+    # Viewer-context fields — populated when the caller is authenticated.
+    is_member: bool | None = None
+    is_requested: bool | None = None
+
     created_at: datetime
     updated_at: datetime
 

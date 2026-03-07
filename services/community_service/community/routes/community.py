@@ -27,10 +27,12 @@ _COMMUNITY_EXAMPLE: dict = {
     "id": "550e8400-e29b-41d4-a716-446655440000",
     "name": "CS Department",
     "type": "PUBLIC",
-    "member_users": ["a1b2c3d4-e5f6-7890-abcd-ef1234567890"],
-    "requested_users": [],
     "parent_colleges": ["f47ac10b-58cc-4372-a567-0e02b2c3d479"],
     "posts": [],
+    "member_count": 1,
+    "post_count": 0,
+    "is_member": True,
+    "is_requested": False,
     "created_at": "2026-03-01T10:00:00+00:00",
     "updated_at": "2026-03-01T10:00:00+00:00",
 }
@@ -43,14 +45,14 @@ _ERROR_404 = {
     "description": "Not Found — community with the given ID does not exist",
     "content": {"application/json": {"example": {"detail": "Community not found."}}},
 }
-_ERROR_409_MEMBER = {
-    "description": "Conflict — user is already a member",
-    "content": {"application/json": {"example": {"detail": "You are already a member of this community."}}},
-}
-_ERROR_409_REQUESTED = {
-    "description": "Conflict — join request already pending",
-    "content": {"application/json": {"example": {"detail": "You already have a pending join request for this community."}}},
-}
+
+
+def _with_viewer(community, is_member: bool, is_requested: bool) -> CommunityResponse:
+    """Build a CommunityResponse enriched with viewer-context booleans."""
+    r = CommunityResponse.model_validate(community)
+    r.is_member = is_member
+    r.is_requested = is_requested
+    return r
 
 
 # ---------------------------------------------------------------------------
@@ -64,24 +66,16 @@ _ERROR_409_REQUESTED = {
     summary="Create a community",
     description=(
         "Create a new community. Any authenticated user may create a community.\n\n"
-        "The creator is automatically added as the first `member_user`.\n\n"
+        "The creator is automatically added as the first member.\n\n"
         "**`type`** controls join behaviour:\n"
         "- `PUBLIC` — anyone can join immediately.\n"
         "- `PRIVATE` — join requests must be approved.\n\n"
-        "**`parent_colleges`** optionally links this community to one or more "
-        "college entities.\n\n"
         "**Authentication:** `Authorization: Bearer <access_token>` header required."
     ),
     responses={
-        201: {
-            "description": "Community created",
-            "content": {"application/json": {"example": _COMMUNITY_EXAMPLE}},
-        },
+        201: {"description": "Community created", "content": {"application/json": {"example": _COMMUNITY_EXAMPLE}}},
         401: _ERROR_401,
-        409: {
-            "description": "Conflict — a community with that name already exists",
-            "content": {"application/json": {"example": {"detail": "A community with this name already exists."}}},
-        },
+        409: {"description": "Conflict", "content": {"application/json": {"example": {"detail": "A community with this name already exists."}}}},
     },
 )
 async def create_community(
@@ -91,18 +85,20 @@ async def create_community(
 ) -> CommunityResponse:
     repo = CommunityRepository(db)
     if await repo.get_by_name(body.name):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="A community with this name already exists.",
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A community with this name already exists.")
     community = await repo.create(
         name=body.name,
         type=body.type,
         creator_user_id=current_user.user_id,
         parent_colleges=body.parent_colleges,
     )
-    return CommunityResponse.model_validate(community)
+    # Creator is the first member
+    return _with_viewer(community, is_member=True, is_requested=False)
 
+
+# ---------------------------------------------------------------------------
+# GET /community/my-communities
+# ---------------------------------------------------------------------------
 
 @router.get(
     "/my-communities",
@@ -110,89 +106,79 @@ async def create_community(
     summary="List my communities",
     description=(
         "Returns a paginated list of all communities where the authenticated user "
-        "is an **active member** (i.e. present in `member_users`).\n\n"
-        "Communities where the user only has a **pending join request** "
-        "(`requested_users`) are **not** included here.\n\n"
+        "is an **active member**.\n\n"
+        "All items will have ``is_member=true`` and ``is_requested=false`` by definition.\n\n"
         "**Authentication:** `Authorization: Bearer <access_token>` header required."
     ),
     responses={
-        200: {
-            "description": "Paginated list of the user's communities",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "items": [_COMMUNITY_EXAMPLE],
-                        "total": 1,
-                        "page": 1,
-                        "page_size": 20,
-                    }
-                }
-            },
-        },
+        200: {"description": "Paginated list of the user's communities"},
         401: _ERROR_401,
     },
 )
 async def get_my_communities(
-    page: int = Query(default=1, ge=1, description="Page number (1-based)"),
-    page_size: int = Query(default=20, ge=1, le=100, description="Number of items per page (max 100)"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
     current_user: TokenPayload = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> CommunityListResponse:
     repo = CommunityRepository(db)
-    items, total = await repo.get_by_member(
-        user_id=current_user.user_id,
-        page=page,
-        page_size=page_size,
-    )
-    return CommunityListResponse(
-        items=[CommunityResponse.model_validate(c) for c in items],
-        total=total,
-        page=page,
-        page_size=page_size,
-    )
+    items, total = await repo.get_by_member(user_id=current_user.user_id, page=page, page_size=page_size)
+    # All returned communities are ones this user is a member of
+    enriched = [_with_viewer(c, is_member=True, is_requested=False) for c in items]
+    return CommunityListResponse(items=enriched, total=total, page=page, page_size=page_size)
 
+
+# ---------------------------------------------------------------------------
+# GET /community/college/{college_id}
+# ---------------------------------------------------------------------------
 
 @router.get(
     "/college/{college_id}",
     response_model=CommunityListResponse,
     summary="List communities for a college",
     description=(
-        "Returns a paginated list of all communities that belong to the given "
-        "college (i.e. have `college_id` in their `parent_colleges` array).\n\n"
+        "Returns a paginated list of all communities belonging to the given college.\n\n"
+        "Each item includes ``is_member`` and ``is_requested`` for the calling user — "
+        "computed in **two** indexed DB queries regardless of list size (no N+1).\n\n"
         "**Authentication:** `Authorization: Bearer <access_token>` header required."
     ),
     responses={401: _ERROR_401},
 )
 async def list_college_communities(
     college_id: str,
-    page: int = Query(default=1, ge=1, description="Page number (1-based)"),
-    page_size: int = Query(default=20, ge=1, le=100, description="Items per page (max 100)"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
     current_user: TokenPayload = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> CommunityListResponse:
     repo = CommunityRepository(db)
-    items, total = await repo.get_by_college(
-        college_id=college_id, page=page, page_size=page_size
-    )
-    return CommunityListResponse(
-        items=[CommunityResponse.model_validate(c) for c in items],
-        total=total, page=page, page_size=page_size,
-    )
+    items, total = await repo.get_by_college(college_id=college_id, page=page, page_size=page_size)
 
+    community_ids = [c.id for c in items]
+    membership_map = await repo.get_viewer_membership_map(community_ids, current_user.user_id)
+
+    enriched = [
+        _with_viewer(c, *membership_map.get(c.id, (False, False)))
+        for c in items
+    ]
+    return CommunityListResponse(items=enriched, total=total, page=page, page_size=page_size)
+
+
+# ---------------------------------------------------------------------------
+# GET /community/{community_id}
+# ---------------------------------------------------------------------------
 
 @router.get(
     "/{community_id}",
     response_model=CommunityResponse,
     summary="Get a community by ID",
     description=(
-        "Returns the full community object for the given ID.\n\n"
+        "Returns the full community object including ``is_member`` and "
+        "``is_requested`` for the calling user.\n\n"
         "**Authentication:** `Authorization: Bearer <access_token>` header required."
     ),
     responses={
-        200: {
-            "description": "Community details",
-            "content": {"application/json": {"example": _COMMUNITY_EXAMPLE}},
-        },
+        200: {"description": "Community details", "content": {"application/json": {"example": _COMMUNITY_EXAMPLE}}},
         401: _ERROR_401,
         404: _ERROR_404,
     },
@@ -205,12 +191,15 @@ async def get_community(
     repo = CommunityRepository(db)
     community = await repo.get_by_id(community_id)
     if community is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Community not found.",
-        )
-    return CommunityResponse.model_validate(community)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Community not found.")
+    is_mem = await repo.is_member(community_id, current_user.user_id)
+    is_req = await repo.has_pending_request(community_id, current_user.user_id)
+    return _with_viewer(community, is_member=is_mem, is_requested=is_req)
 
+
+# ---------------------------------------------------------------------------
+# POST /community/{community_id}/join
+# ---------------------------------------------------------------------------
 
 @router.post(
     "/{community_id}/join",
@@ -218,57 +207,21 @@ async def get_community(
     status_code=status.HTTP_200_OK,
     summary="Join or request to join a community",
     description=(
-        "Attempt to join a community. Behaviour depends on the community type:\n\n"
-        "**PUBLIC community** → user is added to `member_users` immediately. "
-        "Response `status` field will be `\"joined\"`.\n\n"
-        "**PRIVATE community** → user is added to `requested_users` (pending approval). "
-        "Response `status` field will be `\"requested\"`. "
-        "The user becomes a full member only after a moderator accepts the request "
-        "(separate endpoint, coming soon).\n\n"
-        "**Idempotency / conflict rules:**\n"
-        "- Sending the request again when already a member → `409 Conflict`.\n"
-        "- Sending the request again when a join request is already pending → `409 Conflict`.\n\n"
+        "**PUBLIC community** → user added immediately (`status: \"joined\"`).\n\n"
+        "**PRIVATE community** → join request queued (`status: \"requested\"`).\n\n"
+        "**Idempotent** — calling again returns the current state without error.\n\n"
         "**Authentication:** `Authorization: Bearer <access_token>` header required."
     ),
     responses={
         200: {
             "description": "Action completed — see `status` field for outcome",
-            "content": {
-                "application/json": {
-                    "examples": {
-                        "joined (PUBLIC)": {
-                            "summary": "User joined a PUBLIC community immediately",
-                            "value": {
-                                "community_id": "550e8400-e29b-41d4-a716-446655440000",
-                                "status": "joined",
-                                "message": "You have joined the community.",
-                            },
-                        },
-                        "requested (PRIVATE)": {
-                            "summary": "Join request submitted for a PRIVATE community",
-                            "value": {
-                                "community_id": "550e8400-e29b-41d4-a716-446655440000",
-                                "status": "requested",
-                                "message": "Your join request has been sent. You will be added once a moderator approves it.",
-                            },
-                        },
-                    }
-                }
-            },
+            "content": {"application/json": {"examples": {
+                "joined": {"value": {"community_id": "...", "status": "joined", "message": "You have joined the community."}},
+                "requested": {"value": {"community_id": "...", "status": "requested", "message": "Your join request has been sent."}},
+            }}},
         },
         401: _ERROR_401,
         404: _ERROR_404,
-        409: {
-            "description": "Conflict — already a member or request already pending",
-            "content": {
-                "application/json": {
-                    "examples": {
-                        "already a member": {"value": _ERROR_409_MEMBER["content"]["application/json"]["example"]},
-                        "request pending": {"value": _ERROR_409_REQUESTED["content"]["application/json"]["example"]},
-                    }
-                }
-            },
-        },
     },
 )
 async def join_community(
@@ -277,52 +230,34 @@ async def join_community(
     db: AsyncSession = Depends(get_db),
 ) -> JoinCommunityResponse:
     repo = CommunityRepository(db)
-
     community = await repo.get_by_id_for_update(community_id)
     if community is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Community not found.",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Community not found.")
 
     user_id = current_user.user_id
-    uid = uuid.UUID(user_id)
 
-    # Already a member?
-    if uid in community.member_users:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="You are already a member of this community.",
-        )
+    # Idempotent: already a member → return current state
+    if await repo.is_member(community_id, user_id):
+        return JoinCommunityResponse(community_id=community_id, status="joined", message="You are already a member of this community.")
 
     if community.type == CommunityType.PUBLIC:
         await repo.add_member(community, user_id)
-        # Notify college_service of the new membership
         _settings = get_settings()
         for college_id in (community.parent_colleges or []):
-            await college_client.record_membership(
-                _settings.COLLEGE_GRPC_TARGET, str(college_id), user_id
-            )
-        return JoinCommunityResponse(
-            community_id=community_id,
-            status="joined",
-            message="You have joined the community.",
-        )
+            await college_client.record_membership(_settings.COLLEGE_GRPC_TARGET, str(college_id), user_id)
+        return JoinCommunityResponse(community_id=community_id, status="joined", message="You have joined the community.")
 
-    # PRIVATE — check if request already pending
-    if uid in community.requested_users:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="You already have a pending join request for this community.",
-        )
+    # PRIVATE — idempotent: already pending
+    if await repo.has_pending_request(community_id, user_id):
+        return JoinCommunityResponse(community_id=community_id, status="requested", message="Your join request is already pending approval.")
 
     await repo.request_join(community, user_id)
-    return JoinCommunityResponse(
-        community_id=community_id,
-        status="requested",
-        message="Your join request has been sent. You will be added once a moderator approves it.",
-    )
+    return JoinCommunityResponse(community_id=community_id, status="requested", message="Your join request has been sent. You will be added once a moderator approves it.")
 
+
+# ---------------------------------------------------------------------------
+# DELETE /community/{community_id}/leave
+# ---------------------------------------------------------------------------
 
 @router.delete(
     "/{community_id}/leave",
@@ -330,36 +265,16 @@ async def join_community(
     status_code=status.HTTP_200_OK,
     summary="Leave a community",
     description=(
-        "Remove the authenticated user from a community's `member_users` list.\n\n"
-        "**Edge cases:**\n"
-        "- If the user is not a member (including if they only have a pending join "
-        "request), the request fails with `409 Conflict`. "
-        "To cancel a pending join request a separate endpoint will be provided.\n"
-        "- If the community does not exist, `404 Not Found` is returned.\n\n"
+        "Remove the authenticated user from a community.\n\n"
+        "If the user only has a **pending join request**, that request is cancelled.\n\n"
+        "If the user is neither a member nor has a pending request, returns `409`.\n\n"
         "**Authentication:** `Authorization: Bearer <access_token>` header required."
     ),
     responses={
-        200: {
-            "description": "User successfully removed from the community",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "community_id": "550e8400-e29b-41d4-a716-446655440000",
-                        "message": "You have left the community.",
-                    }
-                }
-            },
-        },
+        200: {"description": "User successfully removed or pending request cancelled"},
         401: _ERROR_401,
         404: _ERROR_404,
-        409: {
-            "description": "Conflict — user is not an active member of this community",
-            "content": {
-                "application/json": {
-                    "example": {"detail": "You are not a member of this community."}
-                }
-            },
-        },
+        409: {"description": "Conflict — user is not a member and has no pending request"},
     },
 )
 async def leave_community(
@@ -368,47 +283,35 @@ async def leave_community(
     db: AsyncSession = Depends(get_db),
 ) -> LeaveCommunityResponse:
     repo = CommunityRepository(db)
-
     community = await repo.get_by_id_for_update(community_id)
     if community is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Community not found.",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Community not found.")
 
-    uid = uuid.UUID(current_user.user_id)
+    user_id = current_user.user_id
 
-    if uid not in community.member_users:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="You are not a member of this community.",
-        )
+    # Cancel a pending request (user not yet a full member)
+    if not await repo.is_member(community_id, user_id):
+        if await repo.has_pending_request(community_id, user_id):
+            await repo.cancel_request(community, user_id)
+            return LeaveCommunityResponse(community_id=community_id, message="Your join request has been cancelled.")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="You are not a member of this community.")
 
-    await repo.remove_member(community, current_user.user_id)
-    # Notify college_service to remove membership
+    await repo.remove_member(community, user_id)
     _settings = get_settings()
     for college_id in (community.parent_colleges or []):
-        await college_client.remove_membership(
-            _settings.COLLEGE_GRPC_TARGET, str(college_id), current_user.user_id
-        )
-    return LeaveCommunityResponse(
-        community_id=community_id,
-        message="You have left the community.",
-    )
+        await college_client.remove_membership(_settings.COLLEGE_GRPC_TARGET, str(college_id), user_id)
+    return LeaveCommunityResponse(community_id=community_id, message="You have left the community.")
 
 
 # ---------------------------------------------------------------------------
-# PATCH /community/{community_id}  — update community (college admin only)
+# PATCH /community/{community_id}
 # ---------------------------------------------------------------------------
 
 @router.patch(
     "/{community_id}",
     response_model=CommunityResponse,
     summary="Update a community",
-    description=(
-        "Update a community's `name` and/or `type`. Only the college admin of "
-        "the community's parent college (or a SUPER_ADMIN) may do this."
-    ),
+    description="Update a community's `name` and/or `type`. Only the college admin of the community's parent college (or a SUPER_ADMIN) may do this.",
     responses={401: _ERROR_401, 403: {"description": "Forbidden"}, 404: _ERROR_404},
 )
 async def update_community(
@@ -422,21 +325,20 @@ async def update_community(
     if community is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Community not found.")
     community = await repo.update(community, name=body.name, type=body.type)
-    return CommunityResponse.model_validate(community)
+    is_mem = await repo.is_member(community_id, current_user.user_id)
+    is_req = await repo.has_pending_request(community_id, current_user.user_id)
+    return _with_viewer(community, is_member=is_mem, is_requested=is_req)
 
 
 # ---------------------------------------------------------------------------
-# DELETE /community/{community_id}  — delete community (college admin only)
+# DELETE /community/{community_id}
 # ---------------------------------------------------------------------------
 
 @router.delete(
     "/{community_id}",
     status_code=status.HTTP_200_OK,
     summary="Delete a community",
-    description=(
-        "Permanently deletes a community. Only the college admin of the "
-        "community's parent college (or a SUPER_ADMIN) may do this."
-    ),
+    description="Permanently deletes a community. Only the college admin or SUPER_ADMIN may do this.",
     responses={401: _ERROR_401, 403: {"description": "Forbidden"}, 404: _ERROR_404},
 )
 async def delete_community(
@@ -453,18 +355,14 @@ async def delete_community(
 
 
 # ---------------------------------------------------------------------------
-# GET /community/{community_id}/requests  — list pending join requests
+# GET /community/{community_id}/requests
 # ---------------------------------------------------------------------------
 
 @router.get(
     "/{community_id}/requests",
     response_model=PendingRequestsResponse,
     summary="List pending join requests",
-    description=(
-        "Returns all users who have a pending join request for this PRIVATE "
-        "community. Only the college admin of the parent college (or SUPER_ADMIN) "
-        "may view this."
-    ),
+    description="Returns all users with a pending join request for this PRIVATE community. Only the college admin or SUPER_ADMIN may view this.",
     responses={401: _ERROR_401, 403: {"description": "Forbidden"}, 404: _ERROR_404},
 )
 async def list_join_requests(
@@ -476,15 +374,12 @@ async def list_join_requests(
     community = await repo.get_by_id(community_id)
     if community is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Community not found.")
-    return PendingRequestsResponse(
-        community_id=community_id,
-        requested_users=list(community.requested_users or []),
-        total=len(community.requested_users or []),
-    )
+    requested = await repo.get_requested_users(community_id)
+    return PendingRequestsResponse(community_id=community_id, requested_users=requested, total=len(requested))
 
 
 # ---------------------------------------------------------------------------
-# POST /community/{community_id}/requests/{user_id}/approve  — approve join
+# POST /community/{community_id}/requests/{user_id}/approve
 # ---------------------------------------------------------------------------
 
 @router.post(
@@ -492,10 +387,7 @@ async def list_join_requests(
     response_model=ApproveRejectResponse,
     status_code=status.HTTP_200_OK,
     summary="Approve a join request",
-    description=(
-        "Moves `user_id` from `requested_users` into `member_users`. "
-        "Only the college admin of the parent college (or SUPER_ADMIN) may do this."
-    ),
+    description="Moves `user_id` from pending requests into members. Only college admin or SUPER_ADMIN.",
     responses={401: _ERROR_401, 403: {"description": "Forbidden"}, 404: _ERROR_404},
 )
 async def approve_join_request(
@@ -509,29 +401,19 @@ async def approve_join_request(
     if community is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Community not found.")
 
-    uid = uuid.UUID(user_id)
-    if uid not in (community.requested_users or []):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No pending join request found for this user.",
-        )
+    if not await repo.has_pending_request(community_id, user_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No pending join request found for this user.")
 
+    # add_member atomically removes the request and inserts the membership row
     await repo.add_member(community, user_id)
-    # Notify college_service of the new membership
     _settings = get_settings()
     for college_id in (community.parent_colleges or []):
-        await college_client.record_membership(
-            _settings.COLLEGE_GRPC_TARGET, str(college_id), user_id
-        )
-    return ApproveRejectResponse(
-        community_id=community_id,
-        user_id=user_id,
-        message="Join request approved. User is now a member.",
-    )
+        await college_client.record_membership(_settings.COLLEGE_GRPC_TARGET, str(college_id), user_id)
+    return ApproveRejectResponse(community_id=community_id, user_id=user_id, message="Join request approved. User is now a member.")
 
 
 # ---------------------------------------------------------------------------
-# DELETE /community/{community_id}/requests/{user_id}/reject  — reject join
+# DELETE /community/{community_id}/requests/{user_id}/reject
 # ---------------------------------------------------------------------------
 
 @router.delete(
@@ -539,10 +421,7 @@ async def approve_join_request(
     response_model=ApproveRejectResponse,
     status_code=status.HTTP_200_OK,
     summary="Reject a join request",
-    description=(
-        "Removes `user_id` from `requested_users` without adding them as a member. "
-        "Only the college admin of the parent college (or SUPER_ADMIN) may do this."
-    ),
+    description="Removes `user_id` from pending requests without adding to members.",
     responses={401: _ERROR_401, 403: {"description": "Forbidden"}, 404: _ERROR_404},
 )
 async def reject_join_request(
@@ -556,16 +435,8 @@ async def reject_join_request(
     if community is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Community not found.")
 
-    uid = uuid.UUID(user_id)
-    if uid not in (community.requested_users or []):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No pending join request found for this user.",
-        )
+    if not await repo.has_pending_request(community_id, user_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No pending join request found for this user.")
 
     await repo.reject_request(community, user_id)
-    return ApproveRejectResponse(
-        community_id=community_id,
-        user_id=user_id,
-        message="Join request rejected.",
-    )
+    return ApproveRejectResponse(community_id=community_id, user_id=user_id, message="Join request rejected.")

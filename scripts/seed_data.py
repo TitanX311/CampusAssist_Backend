@@ -5,6 +5,7 @@ Seeds:
   • 3 colleges  (IIT Bombay, Delhi University, BITS Pilani)
   • 3 communities per college (9 total)
   • 5 posts per community (45 total)
+  • 3 comments per post  (≤135 total)
 
 Auth flow:
   1. Login as super-admin  → get SUPER_ADMIN token
@@ -14,6 +15,7 @@ Auth flow:
      (POST /api/community)
   5. Regular users (college-admins reused for brevity) join communities
   6. Those users create posts inside the communities
+  7. Users leave comments on each post
 
 Run:
   python scripts/seed_data.py [--base-url http://<minikube-ip>]
@@ -72,6 +74,19 @@ POSTS_TEMPLATE = [
     "Upcoming hackathon next weekend — who's participating?",
     "Just completed my first open-source contribution. Here's what I learned:",
     "Study group forming for the upcoming semester exams — DM to join!",
+]
+
+# 3 comment templates — cycled across posts
+COMMENTS_TEMPLATE = [
+    "Great post! Thanks for sharing this 🙌",
+    "This is really helpful, appreciate you posting!",
+    "Totally agree with this. Anyone else want to collaborate?",
+    "Could you share more details about this?",
+    "Bookmarking this for later. Super useful!",
+    "This is exactly what I was looking for, thank you!",
+    "Count me in! When is this happening?",
+    "Amazing work, keep it up 💪",
+    "Does anyone have any follow-up resources on this topic?",
 ]
 
 
@@ -218,10 +233,13 @@ def main(base_url: str) -> None:
                     community_matrix[c_idx].append(match["id"])
                     print(f"  ✓  Community '{name}' already exists  (id={match['id']})")
 
-    # ── 5. Seed users join PUBLIC communities ─────────────────────────────
-    print("\n── Step 5: College admins join their communities")
-    for c_idx, token in enumerate(college_tokens):
-        for cid in community_matrix[c_idx]:
+    # ── 5. All college admins join ALL communities ────────────────────────
+    # Every user joins every community so that any of them can comment on
+    # any post in step 7 (PUBLIC → immediate membership; PRIVATE → join
+    # request, which is fine — we skip PRIVATE posts in step 6 anyway).
+    print("\n── Step 5: College admins join ALL communities")
+    for token in college_tokens:
+        for cid in community_ids:
             res = post(base_url, f"/api/community/{cid}/join", {}, token)
             if res:
                 print(f"  ✓  Joined community {cid}  (status={res.get('status')})")
@@ -229,6 +247,8 @@ def main(base_url: str) -> None:
     # ── 6. Create posts — only in communities the user is a full member of ─
     print("\n── Step 6: Create posts")
     post_count = 0
+    # Collect (post_id, community_id, token) so we can seed comments in step 7
+    created_posts: list[tuple[str, str, str]] = []
     for c_idx, token in enumerate(college_tokens):
         for cid in community_matrix[c_idx]:
             # Re-fetch community to check membership (PUBLIC = creator joined, PRIVATE = only requested)
@@ -240,10 +260,7 @@ def main(base_url: str) -> None:
                 continue
             community_data = r.json()
             # Only post if this user is an actual member (not just a requester)
-            college_uid = college_user_ids[c_idx]
-            import uuid as _uuid
-            member_uuids = [str(_uuid.UUID(m)) for m in community_data.get("member_users", [])]
-            if str(_uuid.UUID(college_uid)) not in member_uuids:
+            if not community_data.get("is_member"):
                 print(f"  ↷  Skipping PRIVATE community {cid} (user only has join request)")
                 continue
             for content in POSTS_TEMPLATE:
@@ -251,8 +268,28 @@ def main(base_url: str) -> None:
                 res = post(base_url, "/api/posts", body, token)
                 if res:
                     post_count += 1
+                    pid = res.get("id") or res.get("post_id")
+                    if pid:
+                        created_posts.append((pid, cid, token))
 
     print(f"\n  ✓  Created {post_count} posts")
+
+    # ── 7. Seed comments ───────────────────────────────────────────────────
+    print("\n── Step 7: Create comments")
+    comment_count = 0
+    # Put 3 comments on each post, rotating through the templates and tokens
+    COMMENTS_PER_POST = 3
+    for p_idx, (pid, cid, _) in enumerate(created_posts):
+        # Pick a different author token for each comment slot (round-robin)
+        for slot in range(COMMENTS_PER_POST):
+            commenter_token = college_tokens[(p_idx + slot) % len(college_tokens)]
+            content = COMMENTS_TEMPLATE[(p_idx * COMMENTS_PER_POST + slot) % len(COMMENTS_TEMPLATE)]
+            body = {"post_id": pid, "community_id": cid, "content": content}
+            res = post(base_url, "/api/comments", body, commenter_token)
+            if res:
+                comment_count += 1
+
+    print(f"  ✓  Created {comment_count} comments")
 
     # ── Summary ────────────────────────────────────────────────────────────
     print("\n" + "─" * 60)
@@ -260,6 +297,7 @@ def main(base_url: str) -> None:
     print(f"   Colleges    : {len([c for c in college_ids if c])}")
     print(f"   Communities : {len(community_ids)}")
     print(f"   Posts       : {post_count}")
+    print(f"   Comments    : {comment_count}")
     print("─" * 60 + "\n")
 
 

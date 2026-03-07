@@ -2,10 +2,30 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { getCollegeUsers, CollegeUser } from "@/lib/api";
-import { Users, Loader2, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { Users, Loader2, AlertCircle, ChevronLeft, ChevronRight, Mail } from "lucide-react";
 
 interface Props {
   collegeId: string;
+}
+
+function Avatar({ name, picture }: { name: string | null; picture: string | null }) {
+  if (picture) {
+    return (
+      <img
+        src={picture}
+        alt={name ?? "User"}
+        className="w-9 h-9 rounded-full object-cover shrink-0"
+      />
+    );
+  }
+  const initials = name
+    ? name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()
+    : "?";
+  return (
+    <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold shrink-0 select-none">
+      {initials}
+    </div>
+  );
 }
 
 export default function MembersTab({ collegeId }: Props) {
@@ -64,14 +84,38 @@ export default function MembersTab({ collegeId }: Props) {
       ) : (
         <>
           <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
-            {users.map((u, idx) => (
+            {users.map((u) => (
               <div key={u.user_id} className="flex items-center gap-3 px-4 py-3">
-                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 text-xs font-semibold shrink-0">
-                  {((page - 1) * PAGE_SIZE) + idx + 1}
-                </div>
+                <Avatar name={u.name} picture={u.picture} />
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-slate-500 font-mono truncate">{u.user_id}</p>
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <p className="text-sm font-medium text-slate-800 truncate">
+                    {u.name ?? <span className="text-slate-400 italic">Unknown User</span>}
+                  </p>
+                  {u.email && (
+                    <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5 truncate">
+                      <Mail size={10} />
+                      {u.email}
+                    </p>
+                  )}
+                  {!u.email && (
+                    <p className="text-xs text-slate-400 font-mono truncate mt-0.5">
+                      {u.user_id}
+                    </p>
+                  )}
+                </div>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  {u.user_type && (
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                      u.user_type === "SUPER_ADMIN"
+                        ? "bg-purple-50 text-purple-700"
+                        : u.user_type === "COLLEGE"
+                        ? "bg-blue-50 text-blue-700"
+                        : "bg-slate-100 text-slate-600"
+                    }`}>
+                      {u.user_type}
+                    </span>
+                  )}
+                  <p className="text-xs text-slate-400">
                     Joined {new Date(u.joined_at).toLocaleDateString()}
                   </p>
                 </div>

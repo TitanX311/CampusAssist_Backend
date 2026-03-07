@@ -133,6 +133,47 @@ class UserRepository:
         )
         return list(result.scalars().all()), total
 
+    async def search_all(
+        self,
+        search: str | None = None,
+        user_type: str | None = None,
+        is_active: bool | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[User], int]:
+        """Filtered + paginated user list. All filters are optional."""
+        from sqlalchemy import and_, or_
+
+        conditions: list = []
+        if search:
+            conditions.append(
+                or_(
+                    User.email.ilike(f"%{search}%"),
+                    User.name.ilike(f"%{search}%"),
+                )
+            )
+        if user_type:
+            conditions.append(User.type == user_type)
+        if is_active is not None:
+            conditions.append(User.is_active == is_active)
+
+        base_q = select(User)
+        count_q = select(func.count()).select_from(User)
+        if conditions:
+            where = and_(*conditions)
+            base_q = base_q.where(where)
+            count_q = count_q.where(where)
+
+        total = (await self.db.execute(count_q)).scalar_one()
+        items = (
+            await self.db.execute(
+                base_q.order_by(User.created_at.desc())
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
+        ).scalars().all()
+        return list(items), total
+
     async def update_type(self, user: User, new_type: UserType) -> User:
         user.type = new_type
         user.updated_at = datetime.now(timezone.utc)

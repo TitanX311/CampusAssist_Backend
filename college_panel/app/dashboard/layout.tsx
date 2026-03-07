@@ -1,20 +1,25 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
-import { GraduationCap, LayoutDashboard, LogOut, Loader2 } from "lucide-react";
+import { GraduationCap, LayoutDashboard, LogOut, Loader2, ShieldCheck } from "lucide-react";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, signOut, loading } = useAuth();
+  const { user, signOut, loading, isSuperAdmin } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     if (!loading && !user) {
       router.replace("/login");
+      return;
     }
-  }, [user, loading, router]);
+    if (!loading && user && isSuperAdmin && !pathname.startsWith("/dashboard/admin")) {
+      router.replace("/dashboard/admin");
+    }
+  }, [user, loading, isSuperAdmin, pathname, router]);
 
   if (loading) {
     return (
@@ -43,6 +48,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </Link>
 
           <div className="flex items-center gap-4">
+            {isSuperAdmin && (
+              <Link
+                href="/dashboard/admin"
+                className="flex items-center gap-1.5 text-sm font-medium text-purple-600 hover:text-purple-700 px-3 py-1.5 rounded-lg hover:bg-purple-50 transition"
+              >
+                <ShieldCheck size={15} />
+                <span className="hidden sm:inline">Super Admin</span>
+              </Link>
+            )}
             <div className="hidden sm:block text-right">
               <p className="text-sm font-medium text-slate-800 leading-none">{user.name}</p>
               <p className="text-xs text-slate-500 mt-0.5">{user.email}</p>

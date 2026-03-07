@@ -309,7 +309,10 @@ async def delete_attachment(
     if attachment is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found.")
 
-    if str(attachment.uploader_user_id) != current_user.user_id:
+    if (
+        str(attachment.uploader_user_id) != current_user.user_id
+        and current_user.user_type != "SUPER_ADMIN"
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You can only manage your own attachments.",

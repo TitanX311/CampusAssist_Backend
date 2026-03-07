@@ -39,6 +39,15 @@ async def api_patch(
         return await client.patch(url, headers=_auth_headers(request), json=body)
 
 
+async def api_post(
+    url: str,
+    request: Request,
+    body: dict,
+) -> httpx.Response:
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        return await client.post(url, headers=_auth_headers(request), json=body)
+
+
 def raise_for_upstream(resp: httpx.Response) -> None:
     """Raise HTTPException propagating the upstream status code + detail."""
     if resp.status_code >= 400:

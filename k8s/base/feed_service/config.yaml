@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: feed-service-config
+  namespace: default
+  labels:
+    app: feed-service
+data:
+  APP_NAME: "Feed Service"
+  DEBUG: "false"
+  HOST: "0.0.0.0"
+  PORT: "8000"
+  ALGORITHM: "HS256"
+  REDIS_URL: "redis://redis:6379/0"
+  COMMUNITY_SERVICE_URL: "http://community-service"
+  POST_SERVICE_URL: "http://post-service"
+  FEED_CACHE_TTL_SECONDS: "300"
+  FEED_WINDOW_HOURS: "168"
+  FEED_POSTS_PER_COMMUNITY: "100"

@@ -39,6 +39,23 @@ async def get_user_type(target: str, user_id: str) -> str:
         return "USER"
 
 
+async def get_user(target: str, user_id: str) -> dict:
+    """Return {name, picture} for the given user_id.
+
+    Returns an empty dict on any error so callers can safely use .get().
+    Empty-string proto3 defaults are normalised to None.
+    """
+    stub = _get_stub(target)
+    try:
+        resp = await stub.GetUser(auth_pb2.GetUserRequest(user_id=user_id))
+        if resp.found:
+            return {"name": resp.name or None, "picture": resp.picture or None}
+        return {}
+    except grpc.aio.AioRpcError as exc:
+        logger.error("gRPC auth GetUser error: %s", exc)
+        return {}
+
+
 async def close() -> None:
     global _channel, _stub
     if _channel is not None:

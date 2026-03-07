@@ -4,9 +4,11 @@ import { useEffect, useState, useCallback } from "react";
 import {
   Community,
   PendingRequestsResponse,
+  UserProfile,
   getPendingRequests,
   approveJoinRequest,
   rejectJoinRequest,
+  getUserProfile,
 } from "@/lib/api";
 import {
   Bell,
@@ -17,11 +19,32 @@ import {
   Lock,
   ChevronDown,
   ChevronRight,
+  Mail,
 } from "lucide-react";
 
 interface Props {
   communities: Community[]; // already filtered to PRIVATE
   onRefresh: () => Promise<void>;
+}
+
+function RequestorAvatar({ profile }: { profile: UserProfile | null | undefined }) {
+  if (profile?.picture) {
+    return (
+      <img
+        src={profile.picture}
+        alt={profile.name ?? "User"}
+        className="w-8 h-8 rounded-full object-cover shrink-0"
+      />
+    );
+  }
+  const initials = profile?.name
+    ? profile.name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()
+    : profile?.email?.slice(0, 2).toUpperCase() ?? "?";
+  return (
+    <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 text-xs font-bold shrink-0 select-none">
+      {initials}
+    </div>
+  );
 }
 
 export default function RequestsTab({ communities, onRefresh }: Props) {
@@ -55,6 +78,7 @@ function CommunityRequests({
 }) {
   const [open, setOpen] = useState(community.requested_users.length > 0);
   const [requests, setRequests] = useState<PendingRequestsResponse | null>(null);
+  const [profiles, setProfiles] = useState<Record<string, UserProfile | null>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -65,11 +89,28 @@ function CommunityRequests({
     try {
       const data = await getPendingRequests(community.id);
       setRequests(data);
+      // Fetch profiles for any UUIDs we don't have yet
+      const missing = data.requested_users.filter((id) => !(id in profiles));
+      if (missing.length > 0) {
+        const results = await Promise.all(
+          missing.map((id) =>
+            getUserProfile(id)
+              .then((p) => ({ id, profile: p }))
+              .catch(() => ({ id, profile: null }))
+          )
+        );
+        setProfiles((prev) => {
+          const next = { ...prev };
+          for (const { id, profile } of results) next[id] = profile;
+          return next;
+        });
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load requests");
     } finally {
       setLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [community.id]);
 
   useEffect(() => {
@@ -137,49 +178,61 @@ function CommunityRequests({
             </div>
           ) : requests && requests.requested_users.length > 0 ? (
             <ul className="space-y-2">
-              {requests.requested_users.map((userId) => (
-                <li
-                  key={userId}
-                  className="flex items-center justify-between gap-2 bg-slate-50 rounded-lg px-3 py-2.5"
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 text-xs font-semibold shrink-0">
-                      {userId.slice(0, 2).toUpperCase()}
+              {requests.requested_users.map((userId) => {
+                const profile = profiles[userId];
+                return (
+                  <li
+                    key={userId}
+                    className="flex items-center justify-between gap-2 bg-slate-50 rounded-lg px-3 py-2.5"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <RequestorAvatar profile={profile} />
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-slate-800 truncate">
+                          {profile?.name ?? (
+                            <span className="text-slate-400 italic">Loading…</span>
+                          )}
+                        </p>
+                        {profile?.email ? (
+                          <p className="text-xs text-slate-500 flex items-center gap-0.5 truncate">
+                            <Mail size={9} />
+                            {profile.email}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-slate-400 font-mono truncate">{userId}</p>
+                        )}
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-medium text-slate-700 truncate">User</p>
-                      <p className="text-xs text-slate-400 font-mono truncate">{userId}</p>
-                    </div>
-                  </div>
 
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      onClick={() => handleApprove(userId)}
-                      disabled={!!actionLoading}
-                      className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition disabled:opacity-50"
-                    >
-                      {actionLoading === userId ? (
-                        <Loader2 size={11} className="animate-spin" />
-                      ) : (
-                        <UserCheck size={11} />
-                      )}
-                      Approve
-                    </button>
-                    <button
-                      onClick={() => handleReject(userId)}
-                      disabled={!!actionLoading}
-                      className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-lg transition disabled:opacity-50"
-                    >
-                      {actionLoading === userId + "_reject" ? (
-                        <Loader2 size={11} className="animate-spin" />
-                      ) : (
-                        <UserX size={11} />
-                      )}
-                      Reject
-                    </button>
-                  </div>
-                </li>
-              ))}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        onClick={() => handleApprove(userId)}
+                        disabled={!!actionLoading}
+                        className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition disabled:opacity-50"
+                      >
+                        {actionLoading === userId ? (
+                          <Loader2 size={11} className="animate-spin" />
+                        ) : (
+                          <UserCheck size={11} />
+                        )}
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => handleReject(userId)}
+                        disabled={!!actionLoading}
+                        className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-lg transition disabled:opacity-50"
+                      >
+                        {actionLoading === userId + "_reject" ? (
+                          <Loader2 size={11} className="animate-spin" />
+                        ) : (
+                          <UserX size={11} />
+                        )}
+                        Reject
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           ) : (
             <div className="flex items-center justify-center gap-2 py-6 text-slate-400 text-sm">

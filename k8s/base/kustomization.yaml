@@ -70,6 +70,27 @@ resources:
   # redis cache (shared by search-service)
   - redis/deployment.yaml
   - redis/service.yaml
+  # user service + postgres
+  - user_service/deployment.yaml
+  - user_service/service.yaml
+  - user_service/config.yaml
+  - user_postgres/deployment.yaml
+  - user_postgres/service.yaml
+  - user_postgres/pvc.yaml
+  # feed service + postgres
+  - feed_service/deployment.yaml
+  - feed_service/service.yaml
+  - feed_service/config.yaml
+  - feed_postgres/deployment.yaml
+  - feed_postgres/service.yaml
+  - feed_postgres/pvc.yaml
+  # notification service + postgres
+  - notification_service/deployment.yaml
+  - notification_service/service.yaml
+  - notification_service/config.yaml
+  - notification_postgres/deployment.yaml
+  - notification_postgres/service.yaml
+  - notification_postgres/pvc.yaml
   # ingress
   - ingress.yaml
   - ingress-attachments.yaml

@@ -9,6 +9,7 @@ from community.models.community import Community  # noqa: F401 — registers tab
 from community.routes.community import router as community_router
 from community.routes.admin import admin_router
 from community.routes.health import router as health_router
+from community.routes.internal import router as internal_router
 from community.grpc import server as grpc_server
 from community.grpc import college_client
 from community.grpc import auth_client
@@ -41,3 +42,4 @@ app = FastAPI(
 app.include_router(health_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(community_router, prefix="/api")
+app.include_router(internal_router)

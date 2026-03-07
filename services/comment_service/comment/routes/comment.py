@@ -15,6 +15,8 @@ On comment deletion the post_service is notified via
   DELETE /api/posts/{post_id}/comments/{comment_id}
 """
 
+import asyncio
+
 import grpc
 import grpc.aio
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -25,18 +27,67 @@ from comment.config.settings import get_settings
 from comment.dependencies.auth import TokenPayload, get_current_user
 from comment.dependencies.community import assert_community_member
 from comment.repositories.comment_repository import CommentRepository
-from comment.grpc import clients as grpc_clients
+from comment.grpc import auth_client, clients as grpc_clients
 from comment.schemas.comment import (
     CommentListResponse,
     CommentResponse,
     CreateCommentRequest,
     CreateReplyRequest,
     DeleteCommentResponse,
-    LikeResponse,
+    LikeCommentResponse,
     UpdateCommentRequest,
 )
 
 router = APIRouter(prefix="/comments", tags=["Comments"])
+
+
+async def _enrich_comment(
+    comment,
+    *,
+    liked_by_me: bool | None = None,
+    reply_count: int = 0,
+) -> CommentResponse:
+    """Fetch author name/picture from auth_service and attach to the response."""
+    settings = get_settings()
+    base = CommentResponse.model_validate(comment)
+    info = await auth_client.get_user(settings.AUTH_GRPC_TARGET, str(comment.user_id))
+    return base.model_copy(
+        update={
+            "user_name": info.get("name"),
+            "user_picture": info.get("picture"),
+            "liked_by_me": liked_by_me,
+            "reply_count": reply_count,
+        }
+    )
+
+
+async def _enrich_comments(
+    comments,
+    *,
+    like_map: dict[str, bool] | None = None,
+    reply_count_map: dict[str, int] | None = None,
+) -> list[CommentResponse]:
+    """Batch-enrich a list of comments — de-duplicates auth_service lookups."""
+    if not comments:
+        return []
+    settings = get_settings()
+    uid_set = list({str(c.user_id) for c in comments})
+    results = await asyncio.gather(
+        *(auth_client.get_user(settings.AUTH_GRPC_TARGET, uid) for uid in uid_set)
+    )
+    lookup = dict(zip(uid_set, results))
+    return [
+        CommentResponse.model_validate(c).model_copy(
+            update={
+                "user_name": lookup.get(str(c.user_id), {}).get("name"),
+                "user_picture": lookup.get(str(c.user_id), {}).get("picture"),
+                "liked_by_me": (like_map or {}).get(c.id),
+                "reply_count": (reply_count_map or {}).get(c.id, 0),
+            }
+        )
+        for c in comments
+    ]
+
 
 _COMMENT_EXAMPLE = {
     "id": "550e8400-e29b-41d4-a716-446655440000",
@@ -153,8 +204,17 @@ async def list_post_comments(
         page=page,
         page_size=page_size,
     )
+
+    comment_ids = [c.id for c in items]
+    like_map, reply_count_map = await asyncio.gather(
+        repo.get_viewer_like_map(comment_ids, current_user.user_id),
+        asyncio.gather(*(repo.get_reply_count(cid) for cid in comment_ids)),
+    )
+    # asyncio.gather returns a list; zip it back into a dict
+    reply_count_map = dict(zip(comment_ids, reply_count_map))
+
     return CommentListResponse(
-        items=[CommentResponse.model_validate(c) for c in items],
+        items=await _enrich_comments(items, like_map=like_map, reply_count_map=reply_count_map),
         total=total,
         page=page,
         page_size=page_size,
@@ -198,7 +258,11 @@ async def get_comment(
 
     await assert_community_member(str(comment.community_id), current_user)
 
-    return CommentResponse.model_validate(comment)
+    liked_by_me, reply_count = await asyncio.gather(
+        repo.is_liked_by(comment_id, current_user.user_id),
+        repo.get_reply_count(comment_id),
+    )
+    return await _enrich_comment(comment, liked_by_me=liked_by_me, reply_count=reply_count)
 
 
 # ---------------------------------------------------------------------------
@@ -247,7 +311,7 @@ async def create_comment(
     # Notify post_service — best-effort, non-blocking
     await _notify_post_add_comment(str(body.post_id), comment.id)
 
-    return CommentResponse.model_validate(comment)
+    return await _enrich_comment(comment)
 
 
 # ---------------------------------------------------------------------------
@@ -283,7 +347,7 @@ async def update_comment(
     db: AsyncSession = Depends(get_db),
 ) -> CommentResponse:
     repo = CommentRepository(db)
-    comment = await repo.get_by_id(comment_id)
+    comment = await repo.get_by_id_for_update(comment_id)
     if comment is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comment not found.")
 
@@ -296,7 +360,7 @@ async def update_comment(
         )
 
     comment = await repo.update(comment, content=body.content)
-    return CommentResponse.model_validate(comment)
+    return await _enrich_comment(comment)
 
 
 # ---------------------------------------------------------------------------
@@ -341,7 +405,7 @@ async def delete_comment(
     db: AsyncSession = Depends(get_db),
 ) -> DeleteCommentResponse:
     repo = CommentRepository(db)
-    comment = await repo.get_by_id(comment_id)
+    comment = await repo.get_by_id_for_update(comment_id)
     if comment is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comment not found.")
 
@@ -364,30 +428,32 @@ async def delete_comment(
 
 
 # ---------------------------------------------------------------------------
-# Not-yet-implemented stubs
+# POST /comments/{comment_id}/like  — like a comment
+# DELETE /comments/{comment_id}/like — unlike a comment
 # ---------------------------------------------------------------------------
 
 @router.post(
     "/{comment_id}/like",
-    response_model=LikeResponse,
+    response_model=LikeCommentResponse,
     status_code=status.HTTP_200_OK,
-    summary="Like / unlike a comment",
+    summary="Like a comment",
     description=(
-        "Toggle a like on a comment for the authenticated user.\n\n"
-        "- If the user has **not** liked the comment, the like is **added**.\n"
-        "- If the user has **already** liked the comment, the like is **removed**.\n\n"
+        "Add a like to a comment for the authenticated user.\n\n"
+        "Idempotent — calling this when the user has already liked the comment "
+        "returns the current state without incrementing the counter again.\n\n"
         "**Membership required:** the user must be a member of the comment's community.\n\n"
         "**Authentication:** `Authorization: Bearer <access_token>` header required."
     ),
     responses={
         200: {
-            "description": "Like toggled",
+            "description": "Comment liked",
             "content": {
                 "application/json": {
                     "example": {
                         "comment_id": "550e8400-e29b-41d4-a716-446655440000",
                         "liked": True,
                         "likes": 1,
+                        "message": "Comment liked.",
                     }
                 }
             },
@@ -402,7 +468,7 @@ async def like_comment(
     request: Request,
     current_user: TokenPayload = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> LikeResponse:
+) -> LikeCommentResponse:
     repo = CommentRepository(db)
     comment = await repo.get_by_id(comment_id)
     if comment is None:
@@ -410,8 +476,58 @@ async def like_comment(
 
     await assert_community_member(str(comment.community_id), current_user)
 
-    comment, liked = await repo.toggle_like(comment, current_user.user_id)
-    return LikeResponse(comment_id=comment_id, liked=liked, likes=comment.likes)
+    comment, liked = await repo.like(comment, current_user.user_id)
+    msg = "Comment liked." if liked else "Already liked."
+    return LikeCommentResponse(comment_id=comment_id, liked=True, likes=comment.likes, message=msg)
+
+
+@router.delete(
+    "/{comment_id}/like",
+    response_model=LikeCommentResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Unlike a comment",
+    description=(
+        "Remove a like from a comment for the authenticated user.\n\n"
+        "Idempotent — calling this when the user has not liked the comment "
+        "returns the current state without decrementing the counter.\n\n"
+        "**Membership required:** the user must be a member of the comment's community.\n\n"
+        "**Authentication:** `Authorization: Bearer <access_token>` header required."
+    ),
+    responses={
+        200: {
+            "description": "Comment unliked",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "comment_id": "550e8400-e29b-41d4-a716-446655440000",
+                        "liked": False,
+                        "likes": 0,
+                        "message": "Comment unliked.",
+                    }
+                }
+            },
+        },
+        401: _ERROR_401,
+        403: _ERROR_403,
+        404: _ERROR_404_COMMENT,
+    },
+)
+async def unlike_comment(
+    comment_id: str,
+    request: Request,
+    current_user: TokenPayload = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> LikeCommentResponse:
+    repo = CommentRepository(db)
+    comment = await repo.get_by_id(comment_id)
+    if comment is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comment not found.")
+
+    await assert_community_member(str(comment.community_id), current_user)
+
+    comment, unliked = await repo.unlike(comment, current_user.user_id)
+    msg = "Comment unliked." if unliked else "Not liked."
+    return LikeCommentResponse(comment_id=comment_id, liked=False, likes=comment.likes, message=msg)
 
 
 @router.get(
@@ -465,8 +581,15 @@ async def list_replies(
         page=page,
         page_size=page_size,
     )
+    reply_ids = [r.id for r in items]
+    like_map, nested_counts = await asyncio.gather(
+        repo.get_viewer_like_map(reply_ids, current_user.user_id),
+        asyncio.gather(*(repo.get_reply_count(rid) for rid in reply_ids)),
+    )
+    reply_count_map = dict(zip(reply_ids, nested_counts))
+
     return CommentListResponse(
-        items=[CommentResponse.model_validate(c) for c in items],
+        items=await _enrich_comments(items, like_map=like_map, reply_count_map=reply_count_map),
         total=total,
         page=page,
         page_size=page_size,
@@ -519,4 +642,4 @@ async def add_reply(
         content=body.content,
     )
 
-    return CommentResponse.model_validate(reply)
+    return await _enrich_comment(reply)

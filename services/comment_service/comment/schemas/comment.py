@@ -42,19 +42,31 @@ class CommentResponse(BaseModel):
     parent_id: str | None
     content: str
     likes: int
-    liked_by: list[uuid.UUID]
+    # liked_by_me is set at the HTTP layer by looking up the CommentLike join
+    # table for the current viewer — never persisted on the Comment row.
+    liked_by_me: bool | None = None
+    # reply_count is derived at query time; 0 for replies (leaves).
+    reply_count: int = 0
     created_at: datetime
     updated_at: datetime
+    # Populated at the HTTP layer via auth_service gRPC — not stored in this DB
+    user_name: str | None = None
+    user_picture: str | None = None
 
     model_config = {"from_attributes": True}
 
 
-class LikeResponse(BaseModel):
-    """Result of a like/unlike action."""
+class LikeCommentResponse(BaseModel):
+    """Result of an explicit like or unlike action."""
 
     comment_id: str
-    liked: bool          # True = like added, False = like removed
-    likes: int           # updated total
+    liked: bool   # True = like added, False = like removed
+    likes: int    # updated total
+    message: str
+
+
+# Keep the old name as an alias so any existing callers still resolve.
+LikeResponse = LikeCommentResponse
 
 
 class CommentListResponse(BaseModel):

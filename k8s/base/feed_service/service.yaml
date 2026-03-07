@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: feed-service
+  namespace: default
+  labels:
+    app: feed-service
+spec:
+  type: ClusterIP
+  selector:
+    app: feed-service
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000

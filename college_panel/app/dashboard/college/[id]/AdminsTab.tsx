@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { College, addCollegeAdmin, removeCollegeAdmin } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { College, UserProfile, addCollegeAdmin, removeCollegeAdmin, getUserProfile } from "@/lib/api";
 import {
   Shield,
   Plus,
@@ -11,6 +11,7 @@ import {
   Check,
   X,
   Crown,
+  Mail,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 
@@ -19,13 +20,61 @@ interface Props {
   onRefresh: () => Promise<void>;
 }
 
+function AdminAvatar({ profile, isFirst }: { profile: UserProfile | null; isFirst: boolean }) {
+  if (profile?.picture) {
+    return (
+      <img
+        src={profile.picture}
+        alt={profile.name ?? "Admin"}
+        className="w-9 h-9 rounded-full object-cover shrink-0"
+      />
+    );
+  }
+  if (isFirst) {
+    return (
+      <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 shrink-0">
+        <Crown size={14} />
+      </div>
+    );
+  }
+  const initials = profile?.name
+    ? profile.name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()
+    : "?";
+  return (
+    <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold shrink-0 select-none">
+      {initials}
+    </div>
+  );
+}
+
 export default function AdminsTab({ college, onRefresh }: Props) {
   const { user } = useAuth();
+  const [profiles, setProfiles] = useState<Record<string, UserProfile | null>>({});
   const [addMode, setAddMode] = useState(false);
   const [newUserId, setNewUserId] = useState("");
   const [saving, setSaving] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   const [error, setError] = useState("");
+
+  // Fetch user profiles for all admin UUIDs
+  useEffect(() => {
+    const missing = college.admin_users.filter((id) => !(id in profiles));
+    if (missing.length === 0) return;
+    Promise.all(
+      missing.map((id) =>
+        getUserProfile(id)
+          .then((p) => ({ id, profile: p }))
+          .catch(() => ({ id, profile: null }))
+      )
+    ).then((results) => {
+      setProfiles((prev) => {
+        const next = { ...prev };
+        for (const { id, profile } of results) next[id] = profile;
+        return next;
+      });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [college.admin_users]);
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -128,24 +177,27 @@ export default function AdminsTab({ college, onRefresh }: Props) {
         <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
           {college.admin_users.map((adminId, idx) => {
             const isSelf = user?.id === adminId;
+            const profile = profiles[adminId] ?? null;
             return (
-              <div
-                key={adminId}
-                className="flex items-center gap-3 px-4 py-3.5"
-              >
-                <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-xs font-bold shrink-0">
-                  {idx === 0 ? <Crown size={14} /> : adminId.slice(0, 2).toUpperCase()}
-                </div>
+              <div key={adminId} className="flex items-center gap-3 px-4 py-3.5">
+                <AdminAvatar profile={profile} isFirst={idx === 0} />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-800 flex items-center gap-1.5">
-                    Admin {idx + 1}
+                  <p className="text-sm font-medium text-slate-800 flex items-center gap-1.5 truncate">
+                    {profile?.name ?? <span className="text-slate-400 italic">Loading…</span>}
                     {isSelf && (
-                      <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-medium">
+                      <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-medium shrink-0">
                         you
                       </span>
                     )}
                   </p>
-                  <p className="text-xs text-slate-400 font-mono truncate">{adminId}</p>
+                  {profile?.email ? (
+                    <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5 truncate">
+                      <Mail size={10} />
+                      {profile.email}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-slate-400 font-mono truncate mt-0.5">{adminId}</p>
+                  )}
                 </div>
                 <button
                   onClick={() => handleRemove(adminId)}

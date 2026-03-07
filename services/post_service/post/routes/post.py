@@ -8,6 +8,8 @@ All mutating and read operations require:
      and checking that the user's UUID is in the `member_users` list.
 """
 
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,17 +18,69 @@ from post.config.database import get_db
 from post.config.settings import get_settings
 from post.dependencies.auth import TokenPayload, get_current_user
 from post.dependencies.community import assert_community_member
-from post.grpc import attachment_client
+from post.grpc import attachment_client, auth_client
 from post.repositories.post_repository import PostRepository
 from post.schemas.post import (
     CreatePostRequest,
     DeletePostResponse,
+    LikePostResponse,
     PostListResponse,
     PostResponse,
     UpdatePostRequest,
 )
 
 router = APIRouter(prefix="/posts", tags=["Posts"])
+
+
+async def _enrich_post(post, *, liked_by_me: bool | None = None) -> PostResponse:
+    """Fetch author name/picture from auth_service and attach to the response.
+
+    Viewer context fields (``liked_by_me``, ``comment_count``) are embedded so
+    the mobile client never needs a second round-trip.
+    """
+    settings = get_settings()
+    base = PostResponse.model_validate(post)
+    info = await auth_client.get_user(settings.AUTH_GRPC_TARGET, str(post.user_id))
+    return base.model_copy(
+        update={
+            "user_name": info.get("name"),
+            "user_picture": info.get("picture"),
+            "liked_by_me": liked_by_me,
+            "comment_count": len(post.comments or []),
+        }
+    )
+
+
+async def _enrich_posts(
+    posts,
+    *,
+    like_map: dict[str, bool] | None = None,
+) -> list[PostResponse]:
+    """Batch-enrich a list of posts.
+
+    De-duplicates auth_service lookups (one gRPC call per unique user_id).
+    Embeds ``liked_by_me`` and ``comment_count`` in every item so the mobile
+    client has all context in a single HTTP response.
+    """
+    if not posts:
+        return []
+    settings = get_settings()
+    uid_set = list({str(p.user_id) for p in posts})
+    results = await asyncio.gather(
+        *(auth_client.get_user(settings.AUTH_GRPC_TARGET, uid) for uid in uid_set)
+    )
+    lookup = dict(zip(uid_set, results))
+    return [
+        PostResponse.model_validate(p).model_copy(
+            update={
+                "user_name": lookup.get(str(p.user_id), {}).get("name"),
+                "user_picture": lookup.get(str(p.user_id), {}).get("picture"),
+                "liked_by_me": (like_map or {}).get(p.id),
+                "comment_count": len(p.comments or []),
+            }
+        )
+        for p in posts
+    ]
 
 
 class _AddCommentBody(BaseModel):
@@ -114,8 +168,12 @@ async def list_community_posts(
         page=page,
         page_size=page_size,
     )
+    # One extra DB query to resolve liked_by_me for every post in the page.
+    like_map = await repo.get_viewer_like_map(
+        [p.id for p in items], current_user.user_id
+    )
     return PostListResponse(
-        items=[PostResponse.model_validate(p) for p in items],
+        items=await _enrich_posts(items, like_map=like_map),
         total=total,
         page=page,
         page_size=page_size,
@@ -160,7 +218,8 @@ async def get_post(
     await assert_community_member(str(post.community_id), current_user)
 
     post = await repo.increment_views(post)
-    return PostResponse.model_validate(post)
+    liked_by_me = await repo.is_liked_by(post_id, current_user.user_id)
+    return await _enrich_post(post, liked_by_me=liked_by_me)
 
 
 # ---------------------------------------------------------------------------
@@ -222,7 +281,7 @@ async def create_post(
         content=body.content,
         attachments=body.attachments,
     )
-    return PostResponse.model_validate(post)
+    return await _enrich_post(post)
 
 
 # ---------------------------------------------------------------------------
@@ -312,7 +371,7 @@ async def update_post(
     else:
         post = await repo.update(post, content=body.content, attachments=body.attachments)
 
-    return PostResponse.model_validate(post)
+    return await _enrich_post(post)
 
 
 # ---------------------------------------------------------------------------
@@ -393,20 +452,114 @@ async def delete_post(
 
 
 # ---------------------------------------------------------------------------
-# Like stub (not yet implemented)
+# POST /posts/{post_id}/like  — toggle like
+# DELETE /posts/{post_id}/like — explicit unlike
 # ---------------------------------------------------------------------------
 
 @router.post(
     "/{post_id}/like",
-    status_code=status.HTTP_501_NOT_IMPLEMENTED,
-    summary="Like / unlike a post (not implemented)",
-    description="Toggle a like on a post. **Not yet implemented.**",
-    include_in_schema=True,
+    response_model=LikePostResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Like a post",
+    description=(
+        "Add a like to a post.  Idempotent — calling this endpoint when the "
+        "viewer has already liked the post returns the current state without "
+        "double-counting.\n\n"
+        "**Membership required:** the authenticated user must be a member of the "
+        "community the post belongs to.\n\n"
+        "**Authentication:** `Authorization: Bearer <access_token>` header required."
+    ),
+    responses={
+        200: {
+            "description": "Like registered (or already present)",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "post_id": "550e8400-e29b-41d4-a716-446655440000",
+                        "liked": True,
+                        "likes": 1,
+                        "message": "Post liked.",
+                    }
+                }
+            },
+        },
+        401: _ERROR_401,
+        403: _ERROR_403,
+        404: _ERROR_404_POST,
+    },
 )
-async def like_post(post_id: str) -> dict:  # noqa: ARG001
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="This endpoint is not yet implemented.",
+async def like_post(
+    post_id: str,
+    request: Request,
+    current_user: TokenPayload = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> LikePostResponse:
+    repo = PostRepository(db)
+    post = await repo.get_by_id_for_update(post_id)
+    if post is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found.")
+
+    await assert_community_member(str(post.community_id), current_user)
+
+    post, liked = await repo.like(post, current_user.user_id)
+    return LikePostResponse(
+        post_id=post_id,
+        liked=True,
+        likes=post.likes,
+        message="Post liked." if liked else "Post already liked.",
+    )
+
+
+@router.delete(
+    "/{post_id}/like",
+    response_model=LikePostResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Unlike a post",
+    description=(
+        "Remove a like from a post.  Idempotent — calling this endpoint when the "
+        "viewer has not liked the post returns the current state without error.\n\n"
+        "**Membership required:** the authenticated user must be a member of the "
+        "community the post belongs to.\n\n"
+        "**Authentication:** `Authorization: Bearer <access_token>` header required."
+    ),
+    responses={
+        200: {
+            "description": "Like removed (or was not present)",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "post_id": "550e8400-e29b-41d4-a716-446655440000",
+                        "liked": False,
+                        "likes": 0,
+                        "message": "Post unliked.",
+                    }
+                }
+            },
+        },
+        401: _ERROR_401,
+        403: _ERROR_403,
+        404: _ERROR_404_POST,
+    },
+)
+async def unlike_post(
+    post_id: str,
+    request: Request,
+    current_user: TokenPayload = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> LikePostResponse:
+    repo = PostRepository(db)
+    post = await repo.get_by_id_for_update(post_id)
+    if post is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found.")
+
+    await assert_community_member(str(post.community_id), current_user)
+
+    post, unliked = await repo.unlike(post, current_user.user_id)
+    return LikePostResponse(
+        post_id=post_id,
+        liked=False,
+        likes=post.likes,
+        message="Post unliked." if unliked else "Post was not liked.",
     )
 
 
@@ -446,7 +599,7 @@ async def add_comment(
     await assert_community_member(str(post.community_id), current_user)
 
     post = await repo.add_comment(post, str(body.comment_id))
-    return PostResponse.model_validate(post)
+    return await _enrich_post(post)
 
 
 @router.delete(
@@ -485,4 +638,4 @@ async def delete_comment(
     await assert_community_member(str(post.community_id), current_user)
 
     post = await repo.remove_comment(post, comment_id)
-    return PostResponse.model_validate(post)
+    return await _enrich_post(post)

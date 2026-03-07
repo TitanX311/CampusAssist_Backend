@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import {
   getCollege,
   getCollegeCommunities,
+  updateCollege,
   College,
   Community,
 } from "@/lib/api";
@@ -19,6 +20,9 @@ import {
   AlertCircle,
   Shield,
   FileText,
+  Pencil,
+  X,
+  Check,
 } from "lucide-react";
 import CommunitiesTab from "./CommunitiesTab";
 import RequestsTab from "./RequestsTab";
@@ -35,6 +39,10 @@ export default function CollegePage() {
   const [tab, setTab] = useState<Tab>("communities");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState({ name: "", contact_email: "", physical_address: "" });
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState("");
 
   const fetchCollege = useCallback(async () => {
     const [c, comms] = await Promise.all([
@@ -51,6 +59,33 @@ export default function CollegePage() {
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, [fetchCollege]);
+
+  function openEdit() {
+    if (!college) return;
+    setEditForm({
+      name: college.name,
+      contact_email: college.contact_email,
+      physical_address: college.physical_address,
+    });
+    setEditError("");
+    setEditOpen(true);
+  }
+
+  async function handleEditSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!college) return;
+    setEditSaving(true);
+    setEditError("");
+    try {
+      await updateCollege(college.id, editForm);
+      setEditOpen(false);
+      await fetchCollege();
+    } catch (err: unknown) {
+      setEditError(err instanceof Error ? err.message : "Failed to update college");
+    } finally {
+      setEditSaving(false);
+    }
+  }
 
   const privateCommunities = communities.filter((c) => c.type === "PRIVATE");
   const totalRequests = privateCommunities.reduce(
@@ -99,6 +134,75 @@ export default function CollegePage() {
         All colleges
       </Link>
 
+      {/* Edit college modal */}
+      {editOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-semibold text-slate-800">Edit College</h2>
+              <button
+                onClick={() => setEditOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 transition"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            {editError && (
+              <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 mb-4 text-sm">
+                <AlertCircle size={14} />
+                {editError}
+              </div>
+            )}
+            <form onSubmit={handleEditSave} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
+                <input
+                  value={editForm.name}
+                  onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+                  required
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Contact email</label>
+                <input
+                  type="email"
+                  value={editForm.contact_email}
+                  onChange={(e) => setEditForm((f) => ({ ...f, contact_email: e.target.value }))}
+                  required
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Physical address</label>
+                <input
+                  value={editForm.physical_address}
+                  onChange={(e) => setEditForm((f) => ({ ...f, physical_address: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="submit"
+                  disabled={editSaving}
+                  className="flex items-center gap-1.5 flex-1 justify-center bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition disabled:bg-blue-400"
+                >
+                  {editSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                  Save changes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditOpen(false)}
+                  className="px-4 py-2 text-sm text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* College header */}
       <div className="bg-white rounded-2xl border border-slate-200 p-5 mb-6 flex items-center gap-4">
         <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
@@ -112,6 +216,13 @@ export default function CollegePage() {
           <p className="text-xs text-slate-400">Contact</p>
           <p className="text-sm text-slate-700">{college.contact_email}</p>
         </div>
+        <button
+          onClick={openEdit}
+          className="ml-1 p-2 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition"
+          title="Edit college"
+        >
+          <Pencil size={16} />
+        </button>
       </div>
 
       {/* Tabs */}

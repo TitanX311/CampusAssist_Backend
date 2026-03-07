@@ -18,6 +18,11 @@ _SERVICES = [
     ("Comment Service",     "/api/comments/openapi.json"),
     ("Attachment Service",  "/api/attachments/openapi.json"),
     ("College Service",     "/api/college/openapi.json"),
+    ("Admin Service",       "/api/admin/openapi.json"),
+    ("Search Service",      "/api/search/openapi.json"),
+    ("User Service",        "/api/users/openapi.json"),
+    ("Feed Service",        "/api/feed/openapi.json"),
+    ("Notification Service", "/api/notifications/openapi.json"),
 ]
 
 _OPTIONS_HTML = "\n      ".join(

@@ -17,6 +17,10 @@ engine = create_async_engine(
     pool_size=10,
     max_overflow=20,
     pool_pre_ping=True,
+    # asyncpg prepared-statement cache must be disabled for SELECT … FOR UPDATE
+    # to work correctly — otherwise asyncpg reuses a cached plan that omits the
+    # lock and the query silently runs without the row lock.
+    connect_args={"statement_cache_size": 0},
 )
 
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)

@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: feed-service
+  namespace: default
+  labels:
+    app: feed-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: feed-service
+  template:
+    metadata:
+      labels:
+        app: feed-service
+    spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z feed-postgres-service 5432; do
+                echo "Waiting for feed-postgres..."; sleep 2;
+              done
+      containers:
+        - name: feed-service
+          image: darshanpanzade2006/campus_assist_feed
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: feed-service-config
+            - secretRef:
+                name: feed-service-secret
+          readinessProbe:
+            httpGet:
+              path: /api/feed/health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 5
+          livenessProbe:
+            httpGet:
+              path: /api/feed/health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"

@@ -31,7 +31,17 @@ class UpdatePostRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 class PostResponse(BaseModel):
-    """Full post representation returned by the API."""
+    """Full post representation returned by the API.
+
+    Viewer-context fields
+    ----------------------
+    ``liked_by_me`` — whether the calling user has liked this post.
+    ``comment_count`` — number of comments (len of ``comments`` array).
+
+    These are populated by the route handler from the ``PostLike`` join table
+    in a single batch query — never N+1.  They are ``None`` when no viewer
+    context is available (e.g. admin list endpoint).
+    """
 
     id: str
     user_id: uuid.UUID
@@ -41,8 +51,14 @@ class PostResponse(BaseModel):
     views: int
     attachments: list[uuid.UUID]
     comments: list[uuid.UUID]
+    comment_count: int = 0
     created_at: datetime
     updated_at: datetime
+    # Populated at the HTTP layer via auth_service gRPC — not stored in this DB
+    user_name: str | None = None
+    user_picture: str | None = None
+    # Viewer-context — populated when an authenticated caller is known
+    liked_by_me: bool | None = None
 
     model_config = {"from_attributes": True}
 
@@ -61,3 +77,13 @@ class DeletePostResponse(BaseModel):
 
     post_id: str
     message: str
+
+
+class LikePostResponse(BaseModel):
+    """Result of a like / unlike action."""
+
+    post_id: str
+    liked: bool         # True = now liked, False = now unliked
+    likes: int          # updated total like count
+    message: str
+

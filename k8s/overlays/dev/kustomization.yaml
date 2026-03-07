@@ -28,6 +28,12 @@ resources:
   - admin_service/secret.yaml
   - search_service/secret.yaml
   - search_postgres/secret.yaml
+  - user_service/secret.yaml
+  - user_postgres/secret.yaml
+  - feed_service/secret.yaml
+  - feed_postgres/secret.yaml
+  - notification_service/secret.yaml
+  - notification_postgres/secret.yaml
 
   # docs hub — dev only
   - docs_service/deployment.yaml
@@ -51,7 +57,13 @@ images:
     newTag: dev
   - name: darshanpanzade2006/campus_assist_search
     newTag: dev
+  - name: darshanpanzade2006/campus_assist_user
+    newTag: dev
+  - name: darshanpanzade2006/campus_assist_feed
+    newTag: dev
   - name: darshanpanzade2006/campus_assist_docs
+    newTag: dev
+  - name: darshanpanzade2006/campus_assist_notification
     newTag: dev
 
 patches:
@@ -86,6 +98,18 @@ patches:
   - path: patches/search-postgres-deploy.yaml
   # Redis cache
   - path: patches/redis-deploy.yaml
+  # User service
+  - path: patches/user-service-config.yaml
+  - path: patches/user-service-deploy.yaml
+  - path: patches/user-postgres-deploy.yaml
+  # Feed service
+  - path: patches/feed-service-config.yaml
+  - path: patches/feed-service-deploy.yaml
+  - path: patches/feed-postgres-deploy.yaml
+  # Notification service
+  - path: patches/notification-service-config.yaml
+  - path: patches/notification-service-deploy.yaml
+  - path: patches/notification-postgres-deploy.yaml
   # Scope dev ingress to its own hostname to avoid route collision with prod
   - path: patches/ingress.yaml
   - path: patches/ingress-attachments.yaml

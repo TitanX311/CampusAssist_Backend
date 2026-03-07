@@ -1,10 +1,12 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
+from sqlalchemy import update as sql_update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from comment.models.comment import Comment
+from comment.models.comment import Comment, CommentLike
 
 
 class CommentRepository:
@@ -17,6 +19,17 @@ class CommentRepository:
 
     async def get_by_id(self, comment_id: str) -> Comment | None:
         result = await self.db.execute(select(Comment).where(Comment.id == comment_id))
+        return result.scalar_one_or_none()
+
+    async def get_by_id_for_update(self, comment_id: str) -> Comment | None:
+        """Fetch a comment and lock the row (SELECT … FOR UPDATE).
+
+        Use this before any mutating update or delete to prevent concurrent
+        requests from racing on the same row.
+        """
+        result = await self.db.execute(
+            select(Comment).where(Comment.id == comment_id).with_for_update()
+        )
         return result.scalar_one_or_none()
 
     async def get_by_post(
@@ -160,25 +173,102 @@ class CommentRepository:
     # Engagement helpers
     # ------------------------------------------------------------------
 
-    async def toggle_like(self, comment: Comment, user_id: str) -> tuple[Comment, bool]:
-        """
-        Toggle a like for ``user_id`` on ``comment``.
+    async def like(self, comment: Comment, user_id: str) -> tuple[Comment, bool]:
+        """Add a like from *user_id* to *comment*.
 
-        Returns ``(updated_comment, liked)`` where ``liked`` is ``True`` if the
-        like was added and ``False`` if it was removed.
+        Uses ``INSERT … ON CONFLICT DO NOTHING RETURNING`` so the operation is
+        idempotent and race-safe — no row lock on the parent is needed.  The
+        ``likes`` counter is only incremented when an actual insert occurs.
+
+        Returns ``(updated_comment, True)`` when the like was newly added, or
+        ``(comment, False)`` when it was already present.
         """
         uid = uuid.UUID(user_id)
-        liked_by = list(comment.liked_by)
-        if uid in liked_by:
-            liked_by.remove(uid)
-            liked = False
-        else:
-            liked_by.append(uid)
-            liked = True
+        result = await self.db.execute(
+            pg_insert(CommentLike)
+            .values(comment_id=comment.id, user_id=uid, liked_at=datetime.now(timezone.utc))
+            .on_conflict_do_nothing()
+            .returning(CommentLike.comment_id)
+        )
+        inserted = result.scalar_one_or_none() is not None
+        if inserted:
+            await self.db.execute(
+                sql_update(Comment)
+                .where(Comment.id == comment.id)
+                .values(likes=Comment.likes + 1, updated_at=datetime.now(timezone.utc))
+            )
+            await self.db.refresh(comment)
+        return comment, inserted
 
-        comment.liked_by = liked_by
-        comment.likes = len(liked_by)
-        comment.updated_at = datetime.now(timezone.utc)
-        await self.db.flush()
-        await self.db.refresh(comment)
-        return comment, liked
+    async def unlike(self, comment: Comment, user_id: str) -> tuple[Comment, bool]:
+        """Remove a like from *user_id* on *comment*.
+
+        Only decrements the counter when a row was actually deleted, and uses
+        ``func.greatest(likes - 1, 0)`` to guard against going negative.
+
+        Returns ``(updated_comment, True)`` when the like was removed, or
+        ``(comment, False)`` when no like existed.
+        """
+        uid = uuid.UUID(user_id)
+        result = await self.db.execute(
+            delete(CommentLike)
+            .where(CommentLike.comment_id == comment.id, CommentLike.user_id == uid)
+            .returning(CommentLike.comment_id)
+        )
+        deleted = result.scalar_one_or_none() is not None
+        if deleted:
+            await self.db.execute(
+                sql_update(Comment)
+                .where(Comment.id == comment.id)
+                .values(
+                    likes=func.greatest(Comment.likes - 1, 0),
+                    updated_at=datetime.now(timezone.utc),
+                )
+            )
+            await self.db.refresh(comment)
+        return comment, deleted
+
+    async def is_liked_by(self, comment_id: str, user_id: str) -> bool:
+        """Return ``True`` if *user_id* has liked *comment_id*."""
+        uid = uuid.UUID(user_id)
+        row = (
+            await self.db.execute(
+                select(CommentLike).where(
+                    CommentLike.comment_id == comment_id,
+                    CommentLike.user_id == uid,
+                )
+            )
+        ).scalar_one_or_none()
+        return row is not None
+
+    async def get_viewer_like_map(
+        self, comment_ids: list[str], user_id: str
+    ) -> dict[str, bool]:
+        """Return a mapping of comment_id → liked_by_viewer for a batch of IDs.
+
+        Issues a single ``SELECT … WHERE comment_id IN (…) AND user_id = ?``
+        query regardless of page size — no N+1 round-trips.
+        """
+        if not comment_ids:
+            return {}
+        uid = uuid.UUID(user_id)
+        liked_ids = set(
+            (
+                await self.db.execute(
+                    select(CommentLike.comment_id).where(
+                        CommentLike.comment_id.in_(comment_ids),
+                        CommentLike.user_id == uid,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        return {cid: cid in liked_ids for cid in comment_ids}
+
+    async def get_reply_count(self, comment_id: str) -> int:
+        """Return the number of direct replies to *comment_id*."""
+        result = await self.db.execute(
+            select(func.count()).select_from(Comment).where(Comment.parent_id == comment_id)
+        )
+        return result.scalar_one() or 0

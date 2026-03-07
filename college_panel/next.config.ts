@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-const BACKEND = process.env.BACKEND_URL ?? "http://10.111.75.2:8080";
+const BACKEND = process.env.BACKEND_URL ?? "http://10.99.69.2:8080";
 
 const nextConfig: NextConfig = {
   reactCompiler: true,

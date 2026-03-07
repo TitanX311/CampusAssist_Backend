@@ -63,3 +63,24 @@ spec:
                 name: search-service
                 port:
                   number: 80
+          - path: /api/users
+            pathType: Prefix
+            backend:
+              service:
+                name: user-service
+                port:
+                  number: 80
+          - path: /api/feed
+            pathType: Prefix
+            backend:
+              service:
+                name: feed-service
+                port:
+                  number: 80
+          - path: /api/notifications
+            pathType: Prefix
+            backend:
+              service:
+                name: notification-service
+                port:
+                  number: 80

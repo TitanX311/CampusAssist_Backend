@@ -1,8 +1,8 @@
+import asyncio
 import uuid
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from college.config.database import get_db
@@ -16,7 +16,9 @@ from college.schemas.college import (
     AdminActionResponse,
     CollegeListResponse,
     CollegeResponse,
-    CollegeUserListResponse,
+    CollegeStatsResponse,
+    CollegeUserEnrichedListResponse,
+    CollegeUserEnrichedResponse,
     CreateCollegeRequest,
     DeleteCollegeResponse,
     RemoveCommunityResponse,
@@ -24,7 +26,6 @@ from college.schemas.college import (
 )
 
 router = APIRouter(prefix="/college", tags=["College"])
-_bearer = HTTPBearer(auto_error=False)
 
 _EXAMPLE = {
     "id": "550e8400-e29b-41d4-a716-446655440000",
@@ -245,9 +246,12 @@ async def remove_community(
 # GET /college/{college_id}/users  — list all users across all communities
 # ---------------------------------------------------------------------------
 
-@router.get("/{college_id}/users", response_model=CollegeUserListResponse,
+@router.get("/{college_id}/users", response_model=CollegeUserEnrichedListResponse,
     summary="List all users in a college",
-    description="Returns every user who has joined at least one community belonging to this college.",
+    description=(
+        "Returns every user who has joined at least one community belonging to this college. "
+        "User identity fields (name, email, picture) are fetched from auth_service via gRPC."
+    ),
     responses={401: _401, 404: _404})
 async def list_college_users(
     college_id: str,
@@ -255,16 +259,59 @@ async def list_college_users(
     page_size: int = Query(default=20, ge=1, le=100),
     current_user: TokenPayload = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> CollegeUserListResponse:
-    from college.schemas.college import CollegeUserResponse
+) -> CollegeUserEnrichedListResponse:
     repo = CollegeRepository(db)
     college = await repo.get_by_id(college_id)
     if college is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="College not found.")
     items, total = await repo.get_users(college_id, page=page, page_size=page_size)
-    return CollegeUserListResponse(
-        items=[CollegeUserResponse.model_validate(u) for u in items],
-        total=total, page=page, page_size=page_size,
+    _settings = get_settings()
+    user_infos = await asyncio.gather(
+        *[auth_client.get_user(_settings.AUTH_GRPC_TARGET, str(u.user_id)) for u in items]
+    )
+    enriched = [
+        CollegeUserEnrichedResponse(
+            college_id=u.college_id,
+            user_id=u.user_id,
+            joined_at=u.joined_at,
+            name=info.get("name"),
+            email=info.get("email"),
+            picture=info.get("picture"),
+            user_type=info.get("type"),
+        )
+        for u, info in zip(items, user_infos)
+    ]
+    return CollegeUserEnrichedListResponse(
+        items=enriched, total=total, page=page, page_size=page_size
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET /college/{college_id}/stats
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/{college_id}/stats",
+    response_model=CollegeStatsResponse,
+    summary="College aggregate stats",
+    description="Returns community count, admin count, and total member count for a college.",
+    responses={401: _401, 404: _404},
+)
+async def college_stats(
+    college_id: str,
+    current_user: TokenPayload = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> CollegeStatsResponse:
+    repo = CollegeRepository(db)
+    college = await repo.get_by_id(college_id)
+    if college is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="College not found.")
+    _, member_count = await repo.get_users(college_id, page=1, page_size=1)
+    return CollegeStatsResponse(
+        college_id=college_id,
+        community_count=len(college.communities or []),
+        admin_count=len(college.admin_users or []),
+        member_count=member_count,
     )
 
 
@@ -286,7 +333,7 @@ async def list_college_communities(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     current_user: TokenPayload = Depends(get_current_user),
-    credentials: HTTPAuthorizationCredentials = Depends(_bearer),
+    request: Request = None,
     db: AsyncSession = Depends(get_db),
 ):
     repo = CollegeRepository(db)
@@ -296,11 +343,12 @@ async def list_college_communities(
 
     _settings = get_settings()
     url = f"{_settings.COMMUNITY_SERVICE_URL}/api/community/college/{college_id}"
+    auth_header = request.headers.get("Authorization", "") if request else ""
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(
             url,
             params={"page": page, "page_size": page_size},
-            headers={"Authorization": f"Bearer {credentials.credentials}"},
+            headers={"Authorization": auth_header} if auth_header else {},
         )
     if resp.status_code == 200:
         return resp.json()

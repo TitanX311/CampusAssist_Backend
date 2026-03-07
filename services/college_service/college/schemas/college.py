@@ -70,6 +70,35 @@ class CollegeUserListResponse(BaseModel):
     page_size: int
 
 
+class CollegeUserEnrichedResponse(BaseModel):
+    """CollegeUser enriched with identity data fetched from auth_service via gRPC."""
+
+    college_id: uuid.UUID
+    user_id: uuid.UUID
+    joined_at: datetime
+    # Identity fields — None when auth gRPC is unreachable
+    name: str | None = None
+    email: str | None = None
+    picture: str | None = None
+    user_type: str | None = None
+
+
+class CollegeUserEnrichedListResponse(BaseModel):
+    items: list[CollegeUserEnrichedResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class CollegeStatsResponse(BaseModel):
+    """Aggregate counts for a single college."""
+
+    college_id: str
+    community_count: int
+    admin_count: int
+    member_count: int
+
+
 class AdminActionResponse(BaseModel):
     college_id: str
     user_id: str

@@ -39,6 +39,31 @@ async def get_user_type(target: str, user_id: str) -> str:
         return "USER"
 
 
+async def get_user(target: str, user_id: str) -> dict:
+    """
+    Return full user info from auth_service for a given user_id.
+
+    Returns a dict: {found, id, email, name, picture, type} on success.
+    Returns {} on gRPC error so callers can safely treat missing fields as None.
+    """
+    stub = _get_stub(target)
+    try:
+        resp = await stub.GetUser(auth_pb2.GetUserRequest(user_id=user_id))
+        if resp.found:
+            return {
+                "found": True,
+                "id": resp.id,
+                "email": resp.email or None,
+                "name": resp.name or None,
+                "picture": resp.picture or None,
+                "type": resp.type or "USER",
+            }
+        return {"found": False}
+    except grpc.aio.AioRpcError as exc:
+        logger.error("gRPC auth GetUser error for %s: %s", user_id, exc)
+        return {}
+
+
 async def close() -> None:
     global _channel, _stub
     if _channel is not None:

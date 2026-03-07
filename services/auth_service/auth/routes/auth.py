@@ -1,7 +1,10 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.config.database import get_db
+from auth.dependencies.auth import TokenPayload, get_current_user
+from auth.repositories.user_repository import UserRepository
 from auth.schemas.auth import (
     EmailLoginRequest,
     EmailRegisterRequest,
@@ -11,9 +14,17 @@ from auth.schemas.auth import (
     RefreshRequest,
     ResendVerificationRequest,
     TokenResponse,
+    UserResponse,
     VerifyEmailRequest,
 )
 from auth.services.auth_service import AuthService
+
+
+class UpdateMeRequest(BaseModel):
+    """Fields the authenticated user can update on their own profile."""
+
+    name: str | None = None
+    picture: str | None = None
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -229,3 +240,78 @@ async def resend_verification(
     db: AsyncSession = Depends(get_db),
 ):
     return await AuthService(db).resend_verification(data, background_tasks=background_tasks)
+
+
+@router.patch(
+    "/me",
+    response_model=UserResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Update current user profile",
+    description=(
+        "Update the authenticated user's display name and/or profile picture URL.\n\n"
+        "Only provided (non-null) fields are updated. Omit a field to leave it unchanged.\n\n"
+        "**Authentication:** `Authorization: Bearer <access_token>` header required."
+    ),
+    responses={401: _ERROR_401},
+)
+async def update_me(
+    body: "UpdateMeRequest",
+    current_user: TokenPayload = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> UserResponse:
+    repo = UserRepository(db)
+    user = await repo.get_by_id(current_user.user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    user = await repo.update_profile(user, name=body.name, picture=body.picture)
+    return UserResponse(
+        id=str(user.id),
+        email=user.email,
+        name=user.name,
+        picture=user.picture,
+        email_verified=user.email_verified,
+        type=user.type.value,
+    )
+
+
+@router.get(
+    "/me",
+    response_model=UserResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get current user profile",
+    description=(
+        "Returns the full profile of the currently authenticated user.\n\n"
+        "**Authentication:** `Authorization: Bearer <access_token>` header required."
+    ),
+    responses={
+        200: {
+            "description": "Current user profile",
+            "content": {"application/json": {"example": {
+                "id": "550e8400-e29b-41d4-a716-446655440000",
+                "email": "user@example.com",
+                "name": "Jane Doe",
+                "picture": "https://lh3.googleusercontent.com/...",
+                "email_verified": True,
+                "type": "USER",
+            }}},
+        },
+        401: _ERROR_401,
+        404: {"description": "User record not found"},
+    },
+)
+async def get_me(
+    current_user: TokenPayload = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> UserResponse:
+    repo = UserRepository(db)
+    user = await repo.get_by_id(current_user.user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    return UserResponse(
+        id=str(user.id),
+        email=user.email,
+        name=user.name,
+        picture=user.picture,
+        email_verified=user.email_verified,
+        type=user.type.value,
+    )

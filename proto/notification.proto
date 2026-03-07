@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package campus_assist;
+
+// NotificationService is served by notification_service on gRPC port 50056.
+//
+// Other microservices (post_service, comment_service, community_service …) call
+// SendNotification whenever they want to notify a user of an event.
+// SendBulkNotification is a batch variant for community-wide broadcasts.
+//
+// The servicer:
+//   1. Persists the notification to Postgres (ACID, with session.commit).
+//   2. Attempts a best-effort WebSocket push to the recipient if they are
+//      currently connected.
+service NotificationService {
+  // Persist and (optionally) push a single notification to one user.
+  rpc SendNotification (SendNotificationRequest) returns (SendNotificationResponse);
+
+  // Persist and push notifications for multiple users in a single call.
+  // Useful for community broadcasts (e.g. new post in a large community).
+  rpc SendBulkNotification (SendBulkNotificationRequest) returns (SendBulkNotificationResponse);
+}
+
+// ---------------------------------------------------------------------------
+// Notification types (mirrors notification_service.models.NotificationType)
+// Callers MUST pass one of these string values in the `type` field.
+//
+//   LIKE_POST      — someone liked your post
+//   COMMENT_POST   — someone commented on your post
+//   LIKE_COMMENT   — someone liked your comment
+//   REPLY_COMMENT  — someone replied to your comment
+//   JOIN_REQUEST   — someone requested to join your PRIVATE community
+//   JOIN_ACCEPTED  — your join request was accepted
+//   NEW_POST       — a new post was created in a community you follow
+// ---------------------------------------------------------------------------
+
+message SendNotificationRequest {
+  // UUID string of the user who should receive this notification.
+  string user_id   = 1;
+
+  // Notification category — one of the type strings listed above.
+  string type      = 2;
+
+  // Short heading displayed in the push notification / notification list.
+  string title     = 3;
+
+  // Longer description shown in the notification body.
+  string body      = 4;
+
+  // JSON-encoded extra context passed through to the client unchanged.
+  // Examples:
+  //   post_id, community_id, actor_id (who triggered the event)
+  // May be empty string if no extra context is needed.
+  string data_json = 5;
+}
+
+message SendNotificationResponse {
+  bool   success         = 1;
+  // UUID of the persisted Notification row; empty string on failure.
+  string notification_id = 2;
+  // Human-readable reason when success=false.
+  string message         = 3;
+}
+
+message SendBulkNotificationRequest {
+  repeated SendNotificationRequest notifications = 1;
+}
+
+message SendBulkNotificationResponse {
+  bool   success = 1;
+  // Number of notifications actually persisted (may be < len(notifications) on partial failure).
+  int32  count   = 2;
+  string message = 3;
+}
