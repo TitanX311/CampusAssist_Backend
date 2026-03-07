@@ -1,14 +1,43 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# Production overlay — namespace: default, versioned image tags.
-# Run `bash k8s/generate-secrets.sh prod` before applying to generate secret.yaml files.
-# Deploy: kubectl apply -k k8s/overlays/prod
+# Production overlay — GKE / GCE HTTP(S) Load Balancer.
+#
+# ── One-time GCP setup (do this before first deploy) ──────────────────────────
+#   1. Create static IPs:
+#        gcloud compute addresses create campus-assist-ip --global
+#        gcloud compute addresses create campus-assist-files-ip --global
+#
+#   2. Point DNS:
+#        api.YOUR_DOMAIN_HERE   → IP from campus-assist-ip
+#        files.YOUR_DOMAIN_HERE → IP from campus-assist-files-ip
+#
+#   3. Edit placeholders in these two files (replace YOUR_DOMAIN_HERE):
+#        k8s/overlays/prod/managed-cert.yaml
+#        k8s/overlays/prod/patches/auth-service-config.yaml
+#
+#   4. Apply ManagedCertificates first (GKE provisions TLS — takes ~15 min):
+#        kubectl apply -f k8s/overlays/prod/managed-cert.yaml
+#
+# ── Every deploy ───────────────────────────────────────────────────────────────
+#   5. Build & push all images:
+#        bash build.sh             # builds :dev; use TAG=prod bash build.sh for :prod
+#        docker push darshanpanzade2006/campus_assist_<svc>:prod  (×11)
+#
+#   6. Generate secrets from .env.prod files:
+#        bash k8s/generate-secrets.sh prod
+#
+#   7. Deploy:
+#        kubectl apply -k k8s/overlays/prod
+#
+# Teardown: kubectl delete -k k8s/overlays/prod
 
 namespace: default
 
 resources:
   - ../../base
+  # GCE BackendConfig — 300 s timeout for attachment uploads
+  - backendconfig.yaml
   # generated secrets (git-ignored) — run generate-secrets.sh prod first
   - auth_service/secret.yaml
   - postgres/secret.yaml
@@ -21,3 +50,93 @@ resources:
   - attachment_service/secret.yaml
   - attachment_postgres/secret.yaml
   - minio/secret.yaml
+  - college_service/secret.yaml
+  - college_postgres/secret.yaml
+  - admin_service/secret.yaml
+  - search_service/secret.yaml
+  - search_postgres/secret.yaml
+  - user_service/secret.yaml
+  - user_postgres/secret.yaml
+  - feed_service/secret.yaml
+  - feed_postgres/secret.yaml
+  - notification_service/secret.yaml
+  - notification_postgres/secret.yaml
+
+# ── HA: 2 replicas for all stateless services ──────────────────────────────────
+replicas:
+  - name: auth-service
+    count: 2
+  - name: community-service
+    count: 2
+  - name: post-service
+    count: 2
+  - name: comment-service
+    count: 2
+  - name: attachment-service
+    count: 2
+  - name: college-service
+    count: 2
+  - name: admin-service
+    count: 2
+  - name: search-service
+    count: 2
+  - name: user-service
+    count: 2
+  - name: feed-service
+    count: 2
+  - name: notification-service
+    count: 2
+
+# ── Production image tags — build & push before deploying ─────────────────────
+images:
+  - name: darshanpanzade2006/campus_assist_auth
+    newTag: prod
+  - name: darshanpanzade2006/campus_assist_community
+    newTag: prod
+  - name: darshanpanzade2006/campus_assist_post
+    newTag: prod
+  - name: darshanpanzade2006/campus_assist_comment
+    newTag: prod
+  - name: darshanpanzade2006/campus_assist_attachment
+    newTag: prod
+  - name: darshanpanzade2006/campus_assist_college
+    newTag: prod
+  - name: darshanpanzade2006/campus_assist_admin
+    newTag: prod
+  - name: darshanpanzade2006/campus_assist_search
+    newTag: prod
+  - name: darshanpanzade2006/campus_assist_user
+    newTag: prod
+  - name: darshanpanzade2006/campus_assist_feed
+    newTag: prod
+  - name: darshanpanzade2006/campus_assist_notification
+    newTag: prod
+
+patches:
+  # ── GCE ingress — switch both ingresses from nginx to gce class ────────────
+  - path: patches/ingress.yaml
+  - path: patches/ingress-attachments.yaml
+
+  # ── Attachment service — wire GCE BackendConfig for 300 s upload timeout ───
+  - path: patches/attachment-service-svc.yaml
+
+  # ── Auth service — real FRONTEND_URL + email verification enabled ──────────
+  - path: patches/auth-service-config.yaml
+
+  # ── imagePullPolicy: Always — pull from Docker Hub on every rollout ─────────
+  # (base is IfNotPresent; dev overrides to Never; prod must be Always)
+  - target:
+      kind: Deployment
+      name: "auth-service|community-service|post-service|comment-service|attachment-service|college-service|admin-service|search-service|user-service|feed-service|notification-service"
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Always
+
+  # ── PVCs — SSD-backed Balanced PD on GKE (premium-rwo) ────────────────────
+  - target:
+      kind: PersistentVolumeClaim
+    patch: |-
+      - op: add
+        path: /spec/storageClassName
+        value: premium-rwo

@@ -11,6 +11,7 @@ from comment.routes.comment import router as comment_router
 from comment.routes.admin import admin_router
 from comment.routes.internal import router as internal_router
 from comment.grpc import clients as grpc_clients
+from comment.grpc import notification_client
 
 
 @asynccontextmanager
@@ -19,6 +20,7 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
     yield
     await grpc_clients.close_all()
+    await notification_client.close()
     await engine.dispose()
 
 

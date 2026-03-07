@@ -274,21 +274,4 @@ class PostRepository:
         await self.db.refresh(post)
         return post
 
-    # kept for backwards compat
-    async def add_like(self, post: Post) -> Post:
-        await self.db.execute(
-            sql_update(Post)
-            .where(Post.id == post.id)
-            .values(likes=Post.likes + 1, updated_at=datetime.now(timezone.utc))
-        )
-        await self.db.refresh(post)
-        return post
 
-    async def remove_like(self, post: Post) -> Post:
-        await self.db.execute(
-            sql_update(Post)
-            .where(Post.id == post.id)
-            .values(likes=func.greatest(Post.likes - 1, 0), updated_at=datetime.now(timezone.utc))
-        )
-        await self.db.refresh(post)
-        return post

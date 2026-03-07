@@ -1,0 +1,24 @@
+# Switches the attachment ingress from nginx to GCE HTTP(S) Load Balancer.
+# Upload timeouts are handled by the BackendConfig (backendconfig.yaml) — not annotations.
+#
+# Before applying:
+#   gcloud compute addresses create campus-assist-files-ip --global
+#   # Point DNS A record for files.YOUR_DOMAIN_HERE to that IP.
+#   kubectl apply -f k8s/overlays/prod/managed-cert.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: campus-assist-attachments-ingress
+  annotations:
+    # Remove nginx-specific annotations
+    nginx.ingress.kubernetes.io/proxy-request-buffering: null
+    nginx.ingress.kubernetes.io/proxy-body-size: null
+    nginx.ingress.kubernetes.io/proxy-read-timeout: null
+    nginx.ingress.kubernetes.io/proxy-send-timeout: null
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: null
+    # GCE HTTP(S) Load Balancer — timeout handled by BackendConfig
+    kubernetes.io/ingress.global-static-ip-name: "campus-assist-files-ip"
+    networking.gke.io/managed-certificates: "campus-assist-files-cert"
+    kubernetes.io/ingress.allow-http: "false"
+spec:
+  ingressClassName: gce

@@ -18,7 +18,7 @@ from post.config.database import get_db
 from post.config.settings import get_settings
 from post.dependencies.auth import TokenPayload, get_current_user
 from post.dependencies.community import assert_community_member
-from post.grpc import attachment_client, auth_client
+from post.grpc import attachment_client, auth_client, notification_client
 from post.repositories.post_repository import PostRepository
 from post.schemas.post import (
     CreatePostRequest,
@@ -502,6 +502,15 @@ async def like_post(
     await assert_community_member(str(post.community_id), current_user)
 
     post, liked = await repo.like(post, current_user.user_id)
+    if liked and str(post.user_id) != current_user.user_id:
+        asyncio.create_task(notification_client.send(
+            get_settings().NOTIFICATION_GRPC_TARGET,
+            user_id=str(post.user_id),
+            ntype="LIKE_POST",
+            title="Someone liked your post",
+            body="Your post received a new like!",
+            data={"post_id": post_id, "actor_id": current_user.user_id},
+        ))
     return LikePostResponse(
         post_id=post_id,
         liked=True,

@@ -1,0 +1,8 @@
+# Wires the attachment-service Service to the GCE BackendConfig.
+# This is what makes the GCE HTTP(S) LB apply the 300 s timeout for large uploads.
+apiVersion: v1
+kind: Service
+metadata:
+  name: attachment-service
+  annotations:
+    cloud.google.com/backend-config: '{"default": "attachment-backendconfig"}'

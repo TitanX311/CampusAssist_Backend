@@ -7,7 +7,7 @@ from community.config.database import get_db
 from community.config.settings import get_settings
 from community.dependencies.auth import TokenPayload, get_current_user
 from community.dependencies.college_admin import require_community_college_admin
-from community.grpc import college_client
+from community.grpc import college_client, notification_client
 from community.models.community import CommunityType
 from community.repositories.community_repository import CommunityRepository
 from community.schemas.community import (
@@ -409,6 +409,15 @@ async def approve_join_request(
     _settings = get_settings()
     for college_id in (community.parent_colleges or []):
         await college_client.record_membership(_settings.COLLEGE_GRPC_TARGET, str(college_id), user_id)
+    import asyncio
+    asyncio.create_task(notification_client.send(
+        _settings.NOTIFICATION_GRPC_TARGET,
+        user_id=user_id,
+        ntype="JOIN_ACCEPTED",
+        title="Join request approved",
+        body=f"You are now a member of {community.name}!",
+        data={"community_id": community_id},
+    ))
     return ApproveRejectResponse(community_id=community_id, user_id=user_id, message="Join request approved. User is now a member.")
 
 

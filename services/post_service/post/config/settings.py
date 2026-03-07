@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     COMMUNITY_GRPC_TARGET: str = "community-service:50052"
     ATTACHMENT_GRPC_TARGET: str = "attachment-service:50054"
     AUTH_GRPC_TARGET: str = "auth-service:50051"
+    NOTIFICATION_GRPC_TARGET: str = "notification-service:50056"
 
     model_config = SettingsConfigDict(
         env_file="services/post_service/.env",

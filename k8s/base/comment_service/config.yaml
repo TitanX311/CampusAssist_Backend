@@ -15,3 +15,4 @@ data:
   COMMUNITY_GRPC_TARGET: "community-service:50052"
   POST_GRPC_TARGET: "post-service:50053"
   AUTH_GRPC_TARGET: "auth-service:50051"
+  NOTIFICATION_GRPC_TARGET: "notification-service:50056"

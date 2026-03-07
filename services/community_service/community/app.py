@@ -13,6 +13,7 @@ from community.routes.internal import router as internal_router
 from community.grpc import server as grpc_server
 from community.grpc import college_client
 from community.grpc import auth_client
+from community.grpc import notification_client
 
 
 @asynccontextmanager
@@ -25,6 +26,7 @@ async def lifespan(app: FastAPI):
     await grpc_server.stop()
     await college_client.close()
     await auth_client.close()
+    await notification_client.close()
     await engine.dispose()
 
 

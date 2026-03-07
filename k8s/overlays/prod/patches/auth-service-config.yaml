@@ -1,0 +1,14 @@
+# Production auth-service config overrides.
+#
+# !! EDIT BEFORE DEPLOYING !!
+#   Set FRONTEND_URL to your real frontend domain (used in email verification links).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: auth-service-config
+data:
+  DEBUG: "false"
+  SKIP_EMAIL_VERIFICATION: "false"
+  FRONTEND_URL: "https://YOUR_DOMAIN_HERE"
+  ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+  REFRESH_TOKEN_EXPIRE_DAYS: "7"

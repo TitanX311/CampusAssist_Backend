@@ -1,0 +1,13 @@
+# GCE BackendConfig for attachment-service.
+# Raises the GCE HTTP(S) LB backend timeout to 300 s so large file uploads
+# (up to 50 MB) are not cut off by the default 30 s backend timeout.
+# The attachment-service Service is wired to this via patches/attachment-service-svc.yaml.
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: attachment-backendconfig
+  namespace: default
+spec:
+  timeoutSec: 300
+  connectionDraining:
+    drainingTimeoutSec: 300

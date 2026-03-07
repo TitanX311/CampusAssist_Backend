@@ -199,7 +199,12 @@ class CommunityRepository:
         if not community_ids:
             return {}
 
-        uid = uuid.UUID(user_id)
+        # Service-to-service tokens (e.g. search-service) use a non-UUID sub.
+        # In that case there is no viewer membership to compute — return empty.
+        try:
+            uid = uuid.UUID(user_id)
+        except (ValueError, AttributeError):
+            return {}
 
         member_ids = set(
             (

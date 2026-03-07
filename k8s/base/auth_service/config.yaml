@@ -17,7 +17,7 @@ data:
   # SMTP / outbound email
   SMTP_HOST: "smtp.gmail.com"
   SMTP_PORT: "587"
-  SMTP_FROM: ""
+  SMTP_FROM: "Campus Assist <assistcampus6@gmail.com>"
   SMTP_USE_TLS: "true"
   # Email verification
   EMAIL_VERIFICATION_EXPIRE_MINUTES: "1440"

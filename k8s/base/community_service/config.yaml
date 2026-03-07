@@ -13,3 +13,4 @@ data:
   GRPC_PORT: "50052"
   COLLEGE_GRPC_TARGET: "college-service:50055"
   AUTH_GRPC_TARGET: "auth-service:50051"
+  NOTIFICATION_GRPC_TARGET: "notification-service:50056"

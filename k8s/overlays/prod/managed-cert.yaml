@@ -1,0 +1,30 @@
+# GKE ManagedCertificate resources — GKE provisions and auto-renews TLS certs.
+#
+# !! EDIT BEFORE DEPLOYING !!
+#   Replace api.YOUR_DOMAIN_HERE and files.YOUR_DOMAIN_HERE with your real domains.
+#   The domains must already point to the static IPs (A records in your DNS).
+#   GKE may take up to 30 minutes to provision the cert after DNS propagation.
+#
+# Apply separately before the main overlay:
+#   kubectl apply -f k8s/overlays/prod/managed-cert.yaml
+#
+# Then apply the overlay:
+#   kubectl apply -k k8s/overlays/prod
+---
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: campus-assist-cert
+  namespace: default
+spec:
+  domains:
+    - api.YOUR_DOMAIN_HERE   # ← the domain pointing to campus-assist-ip
+---
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: campus-assist-files-cert
+  namespace: default
+spec:
+  domains:
+    - files.YOUR_DOMAIN_HERE  # ← the domain pointing to campus-assist-files-ip

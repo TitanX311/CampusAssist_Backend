@@ -1,5 +1,5 @@
 """
-Feed routes — only accessible to users of type ``USER``.
+Feed routes — accessible to all authenticated users.
 
 Route overview
 --------------
@@ -44,7 +44,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from feed import cache
@@ -65,23 +65,6 @@ from feed.schemas import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/feed", tags=["Feed"])
-
-
-# ---------------------------------------------------------------------------
-# Guard helper
-# ---------------------------------------------------------------------------
-
-def _require_user(current_user: TokenPayload) -> TokenPayload:
-    """Raise 403 if the caller is not a regular USER."""
-    if current_user.user_type != "USER":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=(
-                f"Feed is only available to accounts of type USER. "
-                f"Your account type is {current_user.user_type!r}."
-            ),
-        )
-    return current_user
 
 
 # ---------------------------------------------------------------------------
@@ -119,8 +102,6 @@ async def get_my_feed(
     current_user: TokenPayload = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> FeedResponse:
-    _require_user(current_user)
-
     user_id = current_user.user_id
     settings = get_settings()
     built_fresh = False
@@ -238,8 +219,6 @@ async def get_india_feed(
     page_size: int = Query(default=20, ge=1, le=50, description="Items per page"),
     current_user: TokenPayload = Depends(get_current_user),
 ) -> IndiaFeedResponse:
-    _require_user(current_user)
-
     settings = get_settings()
     built_fresh = False
 
@@ -309,7 +288,6 @@ async def mark_seen(
     current_user: TokenPayload = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SeenResponse:
-    _require_user(current_user)
     user_id = current_user.user_id
 
     await InteractionRepository(db).mark_seen(user_id, post_id)
@@ -342,7 +320,6 @@ async def mark_seen(
 async def invalidate_cache(
     current_user: TokenPayload = Depends(get_current_user),
 ) -> InvalidateCacheResponse:
-    _require_user(current_user)
     await cache.invalidate_feed(current_user.user_id)
     return InvalidateCacheResponse()
 
@@ -370,6 +347,5 @@ async def invalidate_cache(
 async def invalidate_india_cache(
     current_user: TokenPayload = Depends(get_current_user),
 ) -> InvalidateCacheResponse:
-    _require_user(current_user)
     await cache.invalidate_india_feed()
     return InvalidateCacheResponse(status="india feed cache invalidated")

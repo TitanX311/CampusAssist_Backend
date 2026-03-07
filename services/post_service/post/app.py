@@ -14,6 +14,7 @@ from post.grpc import server as grpc_server
 from post.grpc import community_client
 from post.grpc import attachment_client
 from post.grpc import auth_client
+from post.grpc import notification_client
 
 
 @asynccontextmanager
@@ -27,6 +28,7 @@ async def lifespan(app: FastAPI):
     await community_client.close()
     await attachment_client.close()
     await auth_client.close()
+    await notification_client.close()
     await engine.dispose()
 
 

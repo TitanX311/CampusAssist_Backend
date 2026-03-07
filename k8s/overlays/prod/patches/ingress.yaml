@@ -1,0 +1,21 @@
+# Switches the main API ingress from nginx to GCE HTTP(S) Load Balancer.
+#
+# Before applying:
+#   gcloud compute addresses create campus-assist-ip --global
+#   # Note the IP and point your DNS A record for api.YOUR_DOMAIN_HERE to it.
+#   kubectl apply -f k8s/overlays/prod/managed-cert.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: campus-assist-ingress
+  annotations:
+    # Remove nginx-specific annotations (null = delete in strategic merge patch)
+    nginx.ingress.kubernetes.io/proxy-body-size: null
+    nginx.ingress.kubernetes.io/proxy-read-timeout: null
+    nginx.ingress.kubernetes.io/proxy-send-timeout: null
+    # GCE HTTP(S) Load Balancer
+    kubernetes.io/ingress.global-static-ip-name: "campus-assist-ip"
+    networking.gke.io/managed-certificates: "campus-assist-cert"
+    kubernetes.io/ingress.allow-http: "false"
+spec:
+  ingressClassName: gce

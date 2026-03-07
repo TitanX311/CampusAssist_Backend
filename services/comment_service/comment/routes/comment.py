@@ -16,9 +16,11 @@ On comment deletion the post_service is notified via
 """
 
 import asyncio
+import logging
 
 import grpc
 import grpc.aio
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,7 +29,7 @@ from comment.config.settings import get_settings
 from comment.dependencies.auth import TokenPayload, get_current_user
 from comment.dependencies.community import assert_community_member
 from comment.repositories.comment_repository import CommentRepository
-from comment.grpc import auth_client, clients as grpc_clients
+from comment.grpc import auth_client, clients as grpc_clients, notification_client
 from comment.schemas.comment import (
     CommentListResponse,
     CommentResponse,
@@ -39,6 +41,34 @@ from comment.schemas.comment import (
 )
 
 router = APIRouter(prefix="/comments", tags=["Comments"])
+
+logger = logging.getLogger(__name__)
+
+
+async def _send_comment_post_notification(
+    post_id: str, commenter_id: str, auth_header: str
+) -> None:
+    """Fetch post author via HTTP then fire COMMENT_POST notification. Non-fatal."""
+    settings = get_settings()
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            r = await client.get(
+                f"{settings.POST_SERVICE_URL}/api/posts/{post_id}",
+                headers={"Authorization": auth_header},
+            )
+        if r.status_code == 200:
+            post_author_id = r.json().get("user_id")
+            if post_author_id and post_author_id != commenter_id:
+                await notification_client.send(
+                    settings.NOTIFICATION_GRPC_TARGET,
+                    user_id=post_author_id,
+                    ntype="COMMENT_POST",
+                    title="New comment on your post",
+                    body="Someone commented on your post.",
+                    data={"post_id": post_id, "actor_id": commenter_id},
+                )
+    except Exception as exc:
+        logger.warning("COMMENT_POST notification failed: %s", exc)
 
 
 async def _enrich_comment(
@@ -311,6 +341,12 @@ async def create_comment(
     # Notify post_service — best-effort, non-blocking
     await _notify_post_add_comment(str(body.post_id), comment.id)
 
+    # Notify the post author of the new comment — best-effort, non-blocking
+    auth_header = request.headers.get("authorization", "")
+    asyncio.create_task(
+        _send_comment_post_notification(str(body.post_id), current_user.user_id, auth_header)
+    )
+
     return await _enrich_comment(comment)
 
 
@@ -477,6 +513,15 @@ async def like_comment(
     await assert_community_member(str(comment.community_id), current_user)
 
     comment, liked = await repo.like(comment, current_user.user_id)
+    if liked and str(comment.user_id) != current_user.user_id:
+        asyncio.create_task(notification_client.send(
+            get_settings().NOTIFICATION_GRPC_TARGET,
+            user_id=str(comment.user_id),
+            ntype="LIKE_COMMENT",
+            title="Someone liked your comment",
+            body="Your comment received a new like!",
+            data={"comment_id": comment_id, "actor_id": current_user.user_id},
+        ))
     msg = "Comment liked." if liked else "Already liked."
     return LikeCommentResponse(comment_id=comment_id, liked=True, likes=comment.likes, message=msg)
 

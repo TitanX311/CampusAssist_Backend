@@ -37,8 +37,10 @@ class CollegeServicer(CollegeServiceServicer):
                 return RecordMembershipResponse(success=False, message="College not found.")
             try:
                 await repo.record_membership(request.college_id, request.user_id)
+                await db.commit()
                 return RecordMembershipResponse(success=True, message="Membership recorded.")
             except Exception as exc:  # noqa: BLE001
+                await db.rollback()
                 return RecordMembershipResponse(success=False, message=str(exc))
 
     async def RemoveMembership(self, request, context):
@@ -46,6 +48,8 @@ class CollegeServicer(CollegeServiceServicer):
             repo = CollegeRepository(db)
             try:
                 await repo.remove_membership(request.college_id, request.user_id)
+                await db.commit()
                 return RemoveMembershipResponse(success=True, message="Membership removed.")
             except Exception as exc:  # noqa: BLE001
+                await db.rollback()
                 return RemoveMembershipResponse(success=False, message=str(exc))
