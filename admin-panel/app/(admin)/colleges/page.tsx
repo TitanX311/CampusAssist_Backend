@@ -41,6 +41,7 @@ export default function CollegesPage() {
     }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [page]);
 
   async function handleDelete(college: CollegeResponse) {

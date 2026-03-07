@@ -239,11 +239,12 @@ export async function getAdminCommunities(page = 1, pageSize = 20): Promise<Comm
     const errorText = await res.text();
     console.error(`[getAdminCommunities] Error response body:`, errorText);
     
-    let errorData: any = {};
+    let errorData: Record<string, unknown> = {};
     try {
       errorData = JSON.parse(errorText);
-    } catch (e) {
+    } catch (err) {
       console.error(`[getAdminCommunities] Could not parse error response as JSON`);
+      console.error(err);
     }
     
     const errorMsg = (errorData as { detail?: string }).detail || errorText || `HTTP ${res.status}`;

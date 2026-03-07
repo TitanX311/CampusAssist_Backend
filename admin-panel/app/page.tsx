@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/store/AuthContext";
-import { Card, CardHeader, CardContent, CardFooter, Button, Input, Badge, Alert, TableActions, TableActionsCompact, TableHeaderActions } from "@/components";
+import { Card, CardHeader, CardContent, Button, Input, Badge, Alert, TableActions, TableActionsCompact, TableHeaderActions } from "@/components";
 import { AdminLayout } from "@/components/AdminLayout";
 
 export default function Home() {
@@ -387,15 +387,15 @@ export default function Home() {
           <CardContent className="p-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {[
-                { label: '+ Create College', variant: 'primary' },
-                { label: '+ Create Community', variant: 'secondary' },
-                { label: '📊 Export Report', variant: 'outline' },
-                { label: '📋 View Logs', variant: 'ghost' },
+                { label: '+ Create College', variant: 'primary' as const },
+                { label: '+ Create Community', variant: 'secondary' as const },
+                { label: '📊 Export Report', variant: 'outline' as const },
+                { label: '📋 View Logs', variant: 'ghost' as const },
               ].map((action) => (
                 <Button
                   key={action.label}
                   fullWidth
-                  variant={action.variant as any}
+                  variant={action.variant}
                   className="justify-center"
                 >
                   {action.label}
